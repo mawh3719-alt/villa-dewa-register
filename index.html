@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#163b5c">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Villa DEWA Register</title>
+<style>
+:root{font-family:Arial,sans-serif;color:#18212b;background:#f3f6f9}
+*{box-sizing:border-box}body{margin:0;padding:0 0 28px}
+header{background:#163b5c;color:#fff;padding:18px 16px;position:sticky;top:0;z-index:5}
+h1{font-size:20px;margin:0 0 5px}header p{margin:0;font-size:12px;opacity:.85}
+main{max-width:760px;margin:auto;padding:14px}
+.card{background:white;border:1px solid #dbe3ea;border-radius:14px;padding:14px;margin-bottom:13px;box-shadow:0 2px 7px #102a430b}
+h2{font-size:16px;margin:0 0 12px}
+label{display:block;font-size:12px;font-weight:700;color:#536273;margin:10px 0 5px}
+input[type=text],input[type=search]{width:100%;padding:12px;border:1px solid #cbd5df;border-radius:9px;font-size:16px;background:#fff}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button{border:0;border-radius:9px;padding:12px 14px;font-weight:700;font-size:14px;cursor:pointer}
+.primary{background:#1769aa;color:white}.secondary{background:#e8eff5;color:#163b5c}.danger{background:#fff0ef;color:#a52b24}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.photo-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.photo-slot{border:1px dashed #9aabba;border-radius:11px;padding:10px;text-align:center;background:#f8fafc;min-height:145px}
+.photo-slot img{width:100%;height:125px;object-fit:contain;background:#eef2f5;border-radius:7px}
+.photo-slot button{width:100%;margin-top:8px}
+.photo-slot small{display:block;color:#64748b;margin-top:5px}
+.record{display:flex;justify-content:space-between;gap:10px;align-items:center;border-bottom:1px solid #e5eaf0;padding:11px 0}
+.record:last-child{border-bottom:0}.record strong{display:block}.muted{color:#64748b;font-size:12px;margin-top:4px}
+.status{font-size:12px;color:#166534;margin-top:8px;min-height:16px}
+.hidden{display:none!important}.note{font-size:12px;line-height:1.5;color:#5b6876}
+@media(max-width:430px){.grid{grid-template-columns:1fr 1fr}.photo-slot{min-height:125px}.photo-slot img{height:105px}}
+</style>
+</head>
+<body>
+<header><h1>Villa DEWA Register</h1><p>Villa details • DEWA / MAC references • Two site photos</p></header>
+<main>
+<section class="card">
+<h2 id="formTitle">Add villa record</h2>
+<input id="recordId" type="hidden">
+<div class="grid">
+ <div><label for="villa">Villa Number</label><input id="villa" type="text" placeholder="e.g. 101"></div>
+ <div><label for="cluster">Cluster</label><input id="cluster" type="text" placeholder="e.g. A"></div>
+ <div><label for="dewa">DEWA Sr. No.</label><input id="dewa" type="text" placeholder="Enter DEWA number"></div>
+ <div><label for="mac">MAC Number</label><input id="mac" type="text" placeholder="Enter MAC number"></div>
+</div>
+<label>Photographs</label>
+<div class="photo-grid">
+ <div class="photo-slot">
+  <div id="photo1Preview" class="muted">No photo captured</div>
+  <button class="secondary" type="button" onclick="document.getElementById('photo1').click()">📷 Capture Photo 1</button>
+  <input id="photo1" class="hidden" type="file" accept="image/*" capture="environment">
+  <small>Camera opens on supported Android browsers</small>
+ </div>
+ <div class="photo-slot">
+  <div id="photo2Preview" class="muted">No photo captured</div>
+  <button class="secondary" type="button" onclick="document.getElementById('photo2').click()">📷 Capture Photo 2</button>
+  <input id="photo2" class="hidden" type="file" accept="image/*" capture="environment">
+  <small>Camera opens on supported Android browsers</small>
+ </div>
+</div>
+<div class="actions">
+ <button class="primary" id="saveBtn" type="button">Save villa record</button>
+ <button class="secondary" id="newBtn" type="button">New / Clear</button>
+</div>
+<div id="status" class="status" role="status"></div>
+<p class="note">Photos are stored with this record on this device. Keep the original photo quality; images are not intentionally compressed.</p>
+</section>
+
+<section class="card">
+<h2>Saved villa records</h2>
+<input id="search" type="search" placeholder="Search villa, cluster, DEWA or MAC number">
+<div id="records"><p class="muted">No records saved yet.</p></div>
+<div class="actions">
+ <button class="primary" id="exportBtn" type="button">Export Excel (.xlsx)</button>
+ <button class="secondary" id="backupBtn" type="button">Backup records</button>
+ <button class="secondary" id="restoreBtn" type="button">Restore backup</button>
+ <input id="restoreFile" class="hidden" type="file" accept="application/json">
+</div>
+<p class="note">Export creates an Excel workbook with both photographs embedded in each villa row. Back up your records regularly or transfer them to another device.</p>
+</section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script>
+const DB_NAME='VillaDewaRegisterDB', STORE='records';
+let db, photos=[null,null], existingPhotos=[null,null];
+const $=id=>document.getElementById(id);
+function openDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open(DB_NAME,1);req.onupgradeneeded=()=>req.result.createObjectStore(STORE,{keyPath:'id'});req.onsuccess=()=>{db=req.result;resolve()};req.onerror=()=>reject(req.error)})}
+function allRecords(){return new Promise((resolve,reject)=>{const r=db.transaction(STORE).objectStore(STORE).getAll();r.onsuccess=()=>resolve(r.result.sort((a,b)=>Number(a.serial)-Number(b.serial)));r.onerror=()=>reject(r.error)})}
+function putRecord(rec){return new Promise((resolve,reject)=>{const t=db.transaction(STORE,'readwrite');t.objectStore(STORE).put(rec);t.oncomplete=resolve;t.onerror=()=>reject(t.error)})}
+function deleteRecord(id){return new Promise((resolve,reject)=>{const t=db.transaction(STORE,'readwrite');t.objectStore(STORE).delete(id);t.oncomplete=resolve;t.onerror=()=>reject(t.error)})}
+function setStatus(s){$('status').textContent=s}
+function preview(slot, blob){const target=$('photo'+slot+'Preview');target.innerHTML='';if(blob){const img=document.createElement('img');img.src=URL.createObjectURL(blob);img.alt='Captured photo '+slot;target.appendChild(img)}else target.textContent='No photo captured'}
+function resetForm(){ $('recordId').value='';['villa','cluster','dewa','mac'].forEach(x=>$(x).value='');photos=[null,null];existingPhotos=[null,null];$('photo1').value='';$('photo2').value='';preview(1,null);preview(2,null);$('formTitle').textContent='Add villa record';setStatus('')}
+async function refresh(){const records=await allRecords(),q=$('search').value.toLowerCase();const filtered=records.filter(r=>[r.villa,r.cluster,r.dewa,r.mac].join(' ').toLowerCase().includes(q));const box=$('records');box.innerHTML='';if(!filtered.length){box.innerHTML='<p class="muted">No matching records.</p>';return}filtered.forEach(r=>{const div=document.createElement('div');div.className='record';const left=document.createElement('div');const title=document.createElement('strong');title.textContent='Villa '+(r.villa||'—')+' · '+(r.cluster||'No cluster');const sub=document.createElement('div');sub.className='muted';sub.textContent='DEWA: '+(r.dewa||'—')+' | MAC: '+(r.mac||'—')+' | Photos: '+[r.photo1,r.photo2].filter(Boolean).length+'/2';left.append(title,sub);const right=document.createElement('div');const edit=document.createElement('button');edit.className='secondary';edit.textContent='Open';edit.onclick=()=>loadRecord(r.id);const del=document.createElement('button');del.className='danger';del.textContent='Delete';del.onclick=async()=>{if(confirm('Delete this villa record?')){await deleteRecord(r.id);await refresh()}};right.append(edit,del);div.append(left,right);box.append(div)})}
+async function loadRecord(id){const r=(await allRecords()).find(x=>x.id===id);if(!r)return;$('recordId').value=r.id;$('villa').value=r.villa||'';$('cluster').value=r.cluster||'';$('dewa').value=r.dewa||'';$('mac').value=r.mac||'';photos=[null,null];existingPhotos=[r.photo1||null,r.photo2||null];preview(1,r.photo1);preview(2,r.photo2);$('formTitle').textContent='Edit villa record';setStatus('Record loaded. New photos replace the existing photo in that slot.');window.scrollTo({top:0,behavior:'smooth'})}
+for(let i=1;i<=2;i++)$('photo'+i).addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;const villa=$('villa').value.trim();if(!villa){alert('Enter the Villa Number first, then capture the photo.');e.target.value='';return}photos[i-1]=f;preview(i,f);const records=await allRecords();const id=$('recordId').value||crypto.randomUUID();const old=records.find(x=>x.id===id);const rec={id,serial:old?.serial||((Math.max(0,...records.map(x=>Number(x.serial)||0))+1)),villa,cluster:$('cluster').value.trim(),dewa:$('dewa').value.trim(),mac:$('mac').value.trim(),photo1:i===1?f:(photos[0]||existingPhotos[0]||old?.photo1||null),photo2:i===2?f:(photos[1]||existingPhotos[1]||old?.photo2||null),updatedAt:new Date().toISOString()};await putRecord(rec);$('recordId').value=id;existingPhotos=[rec.photo1,rec.photo2];setStatus('Photo '+i+' saved automatically to Villa '+villa+'.');await refresh()});
+$('saveBtn').onclick=async()=>{const villa=$('villa').value.trim();if(!villa){setStatus('Please enter a Villa Number.');$('villa').focus();return}const records=await allRecords();const id=$('recordId').value||crypto.randomUUID();const old=records.find(x=>x.id===id);const rec={id,serial:old?.serial||((Math.max(0,...records.map(x=>Number(x.serial)||0))+1)),villa,cluster:$('cluster').value.trim(),dewa:$('dewa').value.trim(),mac:$('mac').value.trim(),photo1:photos[0]||existingPhotos[0]||null,photo2:photos[1]||existingPhotos[1]||null,updatedAt:new Date().toISOString()};await putRecord(rec);resetForm();setStatus('Villa record saved successfully on this device.');await refresh()};
+$('newBtn').onclick=resetForm;$('search').oninput=refresh;
+$('exportBtn').onclick=async()=>{const records=await allRecords();if(!records.length){alert('No records to export.');return}if(!window.ExcelJS){alert('Excel export needs an internet connection to load the workbook library.');return}const wb=new ExcelJS.Workbook();wb.creator='Villa DEWA Register';const sh=wb.addWorksheet('Villa Register');sh.columns=[{header:'S.No',key:'serial',width:9},{header:'Villa Number',key:'villa',width:18},{header:'Cluster',key:'cluster',width:16},{header:'DEWA Sr. No.',key:'dewa',width:20},{header:'MAC Number',key:'mac',width:22},{header:'Photo 1',key:'p1',width:28},{header:'Photo 2',key:'p2',width:28}];sh.getRow(1).height=26;sh.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};sh.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF163B5C'}};for(let i=0;i<records.length;i++){const r=records[i],row=i+2;sh.addRow({serial:i+1,villa:r.villa,cluster:r.cluster,dewa:r.dewa,mac:r.mac});sh.getRow(row).height=100;for(let c=1;c<=7;c++)sh.getRow(row).getCell(c).alignment={vertical:'middle',horizontal:'center',wrapText:true};for(const [slot,col] of [[1,6],[2,7]]){const blob=r['photo'+slot];if(blob){const data=await blob.arrayBuffer();let ext=(blob.type||'image/jpeg').includes('png')?'png':(blob.type||'').includes('gif')?'gif':'jpeg';const imageId=wb.addImage({buffer:data,extension:ext});sh.addImage(imageId,{tl:{col:col-1,row:row-1},br:{col:col,row:row},editAs:'oneCell'});}else sh.getRow(row).getCell(col).value='No photo';}}sh.views=[{state:'frozen',ySplit:1}];sh.autoFilter={from:'A1',to:'G'+(records.length+1)};const buf=await wb.xlsx.writeBuffer();const url=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const a=document.createElement('a');a.href=url;a.download='Villa_DEWA_MAC_Register.xlsx';a.click();URL.revokeObjectURL(url)};
+$('backupBtn').onclick=async()=>{const rs=await allRecords();const payload=[];for(const r of rs){const x={...r};for(const k of ['photo1','photo2'])if(x[k])x[k]={type:x[k].type,data:Array.from(new Uint8Array(await x[k].arrayBuffer()))};payload.push(x)}const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Villa_Register_Backup.json';a.click();URL.revokeObjectURL(a.href)};
+$('restoreBtn').onclick=()=>$('restoreFile').click();$('restoreFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const data=JSON.parse(await f.text());for(const r of data){for(const k of ['photo1','photo2'])if(r[k]?.data)r[k]=new Blob([new Uint8Array(r[k].data)],{type:r[k].type||'image/jpeg'});await putRecord(r)}await refresh();alert('Backup restored.')}catch(err){alert('Could not restore this backup file.')}e.target.value=''};
+(async()=>{await openDB();await refresh();if('serviceWorker'in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});})();
+</script>
+</body></html>
