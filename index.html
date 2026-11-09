@@ -28,12 +28,12 @@ button{border:0;border-radius:9px;padding:12px 14px;font-weight:700;font-size:14
 .record{display:flex;justify-content:space-between;gap:10px;align-items:center;border-bottom:1px solid #e5eaf0;padding:11px 0}
 .record:last-child{border-bottom:0}.record strong{display:block}.muted{color:#64748b;font-size:12px;margin-top:4px}
 .status{font-size:12px;color:#166534;margin-top:8px;min-height:16px}.auto-field{background:#f1f5f9!important;color:#334155}.ocr-note{font-size:12px;line-height:1.45;color:#475569;background:#f8fafc;padding:9px;border-radius:8px;margin-top:8px}
-.hidden{display:none!important}.note{font-size:12px;line-height:1.5;color:#5b6876}
+.ocr-crop-preview{display:block;width:100%;max-height:180px;object-fit:contain;background:#fff;border:1px solid #dbe3ea;border-radius:7px;margin-top:8px}.hidden{display:none!important}.note{font-size:12px;line-height:1.5;color:#5b6876}
 @media(max-width:430px){.grid{grid-template-columns:1fr 1fr}.photo-slot{min-height:125px}.photo-slot img{height:105px}}
 </style>
 </head>
 <body>
-<header><h1>Villa DEWA Register</h1><p>Villa details • Auto-read DEWA SN / MAC • Plot & GAID lookup • OCR Fix v6</p></header>
+<header><h1>Villa DEWA Register</h1><p>Villa details • Auto-read DEWA SN / MAC • Plot & GAID lookup • OCR Fix v7</p></header>
 <main>
 <section class="card">
 <h2 id="formTitle">Add villa record</h2>
@@ -53,24 +53,25 @@ button{border:0;border-radius:9px;padding:12px 14px;font-weight:700;font-size:14
   <button class="secondary" type="button" onclick="document.getElementById('photo1').click()">📷 Capture Photo 1</button>
   <input id="photo1" class="hidden" type="file" accept="image/*" capture="environment">
   <button class="secondary" id="scanPhoto1" type="button" disabled>Read Photo 1</button>
-  <small>Photo is scanned automatically. OCR reads the DEWA SN: and MAC: labels.</small>
+  <small>Photo is scanned automatically. OCR reads only the DEWA SN: and MAC: text lines. You can edit both fields before saving.</small>
  </div>
  <div class="photo-slot">
   <div id="photo2Preview" class="muted">No photo captured</div>
   <button class="secondary" type="button" onclick="document.getElementById('photo2').click()">📷 Capture Photo 2</button>
   <input id="photo2" class="hidden" type="file" accept="image/*" capture="environment">
   <button class="secondary" id="scanPhoto2" type="button" disabled>Read Photo 2</button>
-  <small>Photo is scanned automatically. OCR reads the DEWA SN: and MAC: labels.</small>
+  <small>Photo is scanned automatically. OCR reads only the DEWA SN: and MAC: text lines. You can edit both fields before saving.</small>
  </div>
 </div>
 <div id="ocrStatus" class="ocr-note" role="status" aria-live="polite">Enter the villa and cluster, then capture a clear, close-up photo of the meter label. OCR will start automatically. You can also tap Read Photo to retry.</div>
+<details id="ocrPreviewWrap" class="ocr-note"><summary>Preview the exact label area scanned</summary><img id="ocrCropPreview" class="ocr-crop-preview" alt="Cropped DEWA SN and MAC label area scanned by OCR"><p class="muted">Only the two narrow text strips shown here are sent to OCR. The rest of the meter photo is not scanned.</p></details>
 <details id="ocrRawWrap" class="ocr-note"><summary>Show text recognised from the last photo</summary><pre id="ocrRaw" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0 0"></pre></details>
 <div class="actions">
  <button class="primary" id="saveBtn" type="button">Save villa record</button>
  <button class="secondary" id="newBtn" type="button">New / Clear</button>
 </div>
 <div id="status" class="status" role="status"></div>
-<p class="note">Photos are stored with this record on this device. The supplied Cluster 1 and Cluster 2 schedules cover 396 villas and automatically fill Developer Plot No. and GAID from the selected cluster and villa number. OCR requires internet access for the first scan and downloads its text engine once. Keep the app open during scanning. Always compare extracted meter details with the original label before saving.</p>
+<p class="note">Photos are stored with this record on this device. The supplied Cluster 1 and Cluster 2 schedules cover 396 villas and automatically fill Developer Plot No. and GAID from the selected cluster and villa number. OCR requires internet access for the first scan and downloads its text engine once. Keep the app open during scanning. DEWA Sr. No. and MAC Number remain editable. OCR will not overwrite a value you have manually entered. Always compare extracted details with the original label before saving.</p>
 </section>
 
 <section class="card">
@@ -144,30 +145,48 @@ async function getOCRWorker(){
  }
  return ocrWorkerPromise;
 }
-async function prepareOCRImage(blob){
+async function prepareOCRImages(blob){
  if(!window.createImageBitmap)throw new Error('This browser cannot crop the photo for corner-only OCR. Please use the latest Google Chrome on Android.');
- const bitmap=await createImageBitmap(blob);
+ // Honour the camera image orientation, then crop only the printed text rows
+ // in the upper-right DEWA identification label. No full-photo fallback.
+ const bitmap=await createImageBitmap(blob,{imageOrientation:'from-image'});
  const w=bitmap.width,h=bitmap.height;
- const canvas=document.createElement('canvas');
- // STRICT CROP: only the upper-right corner containing the DEWA SN / MAC label.
- // No full-photo OCR fallback is permitted.
- const sx=Math.round(w*0.50), sy=0;
- const sw=Math.round(w*0.50), sh=Math.round(h*0.36);
- const scale=4.5;
- canvas.width=Math.max(1,Math.round(sw*scale));
- canvas.height=Math.max(1,Math.round(sh*scale));
- const ctx=canvas.getContext('2d',{willReadFrequently:true});
- ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
- ctx.drawImage(bitmap,sx,sy,sw,sh,0,0,canvas.width,canvas.height);
+ const makeStrip=(top,bottom)=>{
+   const sx=Math.round(w*0.67), sy=Math.round(h*top);
+   const sw=Math.round(w*0.22), sh=Math.round(h*(bottom-top));
+   const scale=7;
+   const canvas=document.createElement('canvas');
+   canvas.width=Math.max(1,Math.round(sw*scale));
+   canvas.height=Math.max(1,Math.round(sh*scale));
+   const ctx=canvas.getContext('2d',{willReadFrequently:true});
+   ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+   ctx.drawImage(bitmap,sx,sy,sw,sh,0,0,canvas.width,canvas.height);
+   const image=ctx.getImageData(0,0,canvas.width,canvas.height);
+   for(let i=0;i<image.data.length;i+=4){
+     const gray=0.299*image.data[i]+0.587*image.data[i+1]+0.114*image.data[i+2];
+     // Lift faint grey label printing while suppressing the pale meter background.
+     const enhanced=Math.max(0,Math.min(255,(gray-145)*2.15+150));
+     image.data[i]=image.data[i+1]=image.data[i+2]=enhanced;
+     image.data[i+3]=255;
+   }
+   ctx.putImageData(image,0,0);
+   return canvas;
+ };
+ // Based on the supplied meter label: separate DEWA SN and MAC rows,
+ // excluding their barcodes and most surrounding graphics.
+ const dewaStrip=makeStrip(0.205,0.238);
+ const macStrip=makeStrip(0.278,0.305);
  bitmap.close?.();
- const image=ctx.getImageData(0,0,canvas.width,canvas.height);
- for(let i=0;i<image.data.length;i+=4){
-   const gray=0.299*image.data[i]+0.587*image.data[i+1]+0.114*image.data[i+2];
-   const enhanced=Math.max(0,Math.min(255,(gray-118)*1.65+138));
-   image.data[i]=image.data[i+1]=image.data[i+2]=enhanced;
- }
- ctx.putImageData(image,0,0);
- return canvas;
+ // A stacked preview lets the user verify exactly what OCR receives.
+ const preview=document.createElement('canvas');
+ preview.width=Math.max(dewaStrip.width,macStrip.width);
+ preview.height=dewaStrip.height+macStrip.height+24;
+ const pc=preview.getContext('2d');pc.fillStyle='#fff';pc.fillRect(0,0,preview.width,preview.height);
+ pc.drawImage(dewaStrip,0,0);pc.drawImage(macStrip,0,dewaStrip.height+24);
+ $('ocrCropPreview').src=preview.toDataURL('image/jpeg',0.92);
+ $('ocrPreviewWrap').open=true;
+ return {dewaStrip,macStrip};
 }
 function cleanMeterValue(value){
  return String(value||'').toUpperCase().replace(/[^A-Z0-9]/g,'').trim();
@@ -210,38 +229,48 @@ async function readPhoto(blob,slot){
  if(!blob){setOCRStatus('No photo is available to scan. Capture Photo '+slot+' first.');return}
  $('ocrRaw').textContent='OCR has not returned any text yet.';
  $('ocrRawWrap').open=true;
- setOCRStatus('Starting OCR for Photo '+slot+'… The first scan may take longer while the engine and English text data download. Keep the app open and online.');
+ setOCRStatus('Preparing the two small DEWA label text crops for Photo '+slot+'…');
  try{
    const worker=await getOCRWorker();
-   setOCRStatus('Reading Photo '+slot+'…');
-   // STRICT: scan only the upper-right corner crop. Never scan the full photograph.
-   const labelImage=await prepareOCRImage(blob);
-   const labelResult=await worker.recognize(labelImage);
-   const rawText=String(labelResult?.data?.text||'').trim();
-   const found=extractDewaMac(rawText);
-   const confidence=Number(labelResult?.data?.confidence||0);
-   $('ocrRaw').textContent=rawText||'(No text was recognised in this photo.)';
-   const updated=[];
+   const strips=await prepareOCRImages(blob);
+   // Single-line segmentation and a restricted character set reduce barcode/noise errors.
+   await worker.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:'});
+   setOCRStatus('Reading only the DEWA SN and MAC text strips from Photo '+slot+'…');
+   const dewaResult=await worker.recognize(strips.dewaStrip);
+   const macResult=await worker.recognize(strips.macStrip);
+   const dewaText=String(dewaResult?.data?.text||'').trim();
+   const macText=String(macResult?.data?.text||'').trim();
+   const rawText='DEWA ROW: '+(dewaText||'(not recognised)')+'\nMAC ROW: '+(macText||'(not recognised)');
+   $('ocrRaw').textContent=rawText;
+   let dewaCompact=dewaText.toUpperCase().replace(/[^A-Z0-9]/g,'').replace(/^DEWASN/,'');
+   // Common OCR confusions on this pale printed label: F may look like E, and 1 may look like I.
+   dewaCompact=dewaCompact.replace(/^RFET/,'RFT').replace(/^RETI/,'RFT1').replace(/(?<=^RFT)[I]/g,'1');
+   const dewaMatch=dewaCompact.match(/RFT[0-9]{7}/);
+   const macCandidates=macText.toUpperCase().replace(/[^A-Z0-9]/g,'').match(/[A-Z0-9]{16,18}/g)||[];
+   const found={dewa:dewaMatch?dewaMatch[0]:'',mac:macCandidates.sort((a,b)=>Math.abs(a.length-16)-Math.abs(b.length-16))[0]||''};
+   const updated=[];const preserved=[];
    if(found.dewa){
-     $('dewa').value=found.dewa;ocrAutoValues.dewa=found.dewa;updated.push('DEWA Sr. No.');
+     const current=$('dewa').value.trim();
+     if(!current||current===ocrAutoValues.dewa){$('dewa').value=found.dewa;ocrAutoValues.dewa=found.dewa;updated.push('DEWA Sr. No.')}else preserved.push('DEWA Sr. No.');
    }
    if(found.mac){
-     $('mac').value=found.mac;ocrAutoValues.mac=found.mac;updated.push('MAC Number');
+     const current=$('mac').value.trim();
+     if(!current||current===ocrAutoValues.mac){$('mac').value=found.mac;ocrAutoValues.mac=found.mac;updated.push('MAC Number')}else preserved.push('MAC Number');
    }
-   
-   if(updated.length){
-     setOCRStatus('Photo '+slot+': OCR found '+updated.join(' and ')+(confidence>0?' (overall text confidence '+Math.round(confidence)+'%)':'')+'. Check both fields against the label, then tap Save villa record.');
-   }else if(found.dewa||found.mac){
-     setOCRStatus('Photo '+slot+': text was recognised, but a field already contained a value and was not overwritten. Check the fields and correct them if needed.');
-   }else if(rawText){
-     setOCRStatus('Photo '+slot+': OCR ran, but it could not confidently match the DEWA serial or MAC label. Open “Show text recognised” below to check what it read. Only the upper-right corner was scanned. Reframe that corner closer, upright and without glare, then retry.');
+   const confidence=Math.round(((Number(dewaResult?.data?.confidence||0)+Number(macResult?.data?.confidence||0))/2));
+   if(updated.length||preserved.length){
+     let message='Photo '+slot+': '+(updated.length?'OCR filled '+updated.join(' and ')+'. ':'');
+     if(preserved.length)message+='Your existing '+preserved.join(' and ')+' field value(s) were kept unchanged. ';
+     message+='Please verify and edit either field if required, then save.';
+     setOCRStatus(message);
    }else{
-     setOCRStatus('Photo '+slot+': OCR ran but found no readable text. Retake the picture closer, upright and in better light.');
+     setOCRStatus('Photo '+slot+': the label crop was scanned, but one or both values were not recognised. Check the crop preview above. You can type or correct both values manually; the fields remain editable. Retake closer/upright with the label sharp and glare-free, then tap Read Photo to retry.');
    }
+   $('ocrRaw').textContent+='\nAverage OCR confidence: '+confidence+'%';
  }catch(err){
    const reason=String(err?.message||err||'Unknown OCR error').replace(/\s+/g,' ').slice(0,220);
    $('ocrRaw').textContent='OCR did not complete. Error: '+reason;
-   setOCRStatus('OCR could not run for Photo '+slot+'. '+reason+' Check that the phone is online, then tap Read Photo to retry.');
+   setOCRStatus('OCR could not run for Photo '+slot+'. '+reason+' You can still enter or edit the DEWA Sr. No. and MAC Number manually.');
  }
 }
 async function scanSavedPhoto(slot){
@@ -251,7 +280,7 @@ async function scanSavedPhoto(slot){
 }
 
 function preview(slot, blob){const target=$('photo'+slot+'Preview');target.innerHTML='';if(blob){const img=document.createElement('img');img.src=URL.createObjectURL(blob);img.alt='Captured photo '+slot;target.appendChild(img)}else target.textContent='No photo captured';const scanButton=$('scanPhoto'+slot);if(scanButton)scanButton.disabled=!blob}
-function resetForm(){ $('recordId').value='';['villa','cluster','dewa','mac','developerPlot','gaid'].forEach(x=>$(x).value='');photos=[null,null];existingPhotos=[null,null];ocrAutoValues.dewa='';ocrAutoValues.mac='';$('photo1').value='';$('photo2').value='';preview(1,null);preview(2,null);$('ocrRaw').textContent='';$('ocrRawWrap').open=false;$('formTitle').textContent='Add villa record';setStatus('');setOCRStatus('Enter the villa and cluster, then capture a clear, close-up photo of the meter label. OCR will start automatically. You can also tap Read Photo to retry.')}
+function resetForm(){ $('recordId').value='';['villa','cluster','dewa','mac','developerPlot','gaid'].forEach(x=>$(x).value='');photos=[null,null];existingPhotos=[null,null];ocrAutoValues.dewa='';ocrAutoValues.mac='';$('photo1').value='';$('photo2').value='';preview(1,null);preview(2,null);$('ocrRaw').textContent='';$('ocrRawWrap').open=false;$('ocrCropPreview').removeAttribute('src');$('ocrPreviewWrap').open=false;$('formTitle').textContent='Add villa record';setStatus('');setOCRStatus('Enter the villa and cluster, then capture a clear, close-up photo of the meter label. OCR will start automatically. You can also tap Read Photo to retry.')}
 async function refresh(){
  const records=await allRecords();
  // Backfill plot and GAID for records created before this lookup update.
@@ -267,7 +296,7 @@ async function refresh(){
  }
  const q=$('search').value.toLowerCase();
  const filtered=records.filter(r=>[r.villa,r.cluster,r.dewa,r.mac,r.developerPlot,r.gaid].join(' ').toLowerCase().includes(q));const box=$('records');box.innerHTML='';if(!filtered.length){box.innerHTML='<p class="muted">No matching records.</p>';return}filtered.forEach(r=>{const div=document.createElement('div');div.className='record';const left=document.createElement('div');const title=document.createElement('strong');title.textContent='Villa '+(r.villa||'—')+' · '+(r.cluster||'No cluster');const sub=document.createElement('div');sub.className='muted';sub.textContent='Plot: '+(r.developerPlot||'—')+' | GAID: '+(r.gaid||'—')+' | DEWA: '+(r.dewa||'—')+' | MAC: '+(r.mac||'—')+' | Photos: '+[r.photo1,r.photo2].filter(Boolean).length+'/2';left.append(title,sub);const right=document.createElement('div');const edit=document.createElement('button');edit.className='secondary';edit.textContent='Open';edit.onclick=()=>loadRecord(r.id);const del=document.createElement('button');del.className='danger';del.textContent='Delete';del.onclick=async()=>{if(confirm('Delete this villa record?')){await deleteRecord(r.id);await refresh()}};right.append(edit,del);div.append(left,right);box.append(div)})}
-async function loadRecord(id){const r=(await allRecords()).find(x=>x.id===id);if(!r)return;$('recordId').value=r.id;$('villa').value=r.villa||'';$('cluster').value=normalizeCluster(r.cluster)||'';$('dewa').value=r.dewa||'';$('mac').value=r.mac||'';$('developerPlot').value=r.developerPlot||'';$('gaid').value=r.gaid||'';if(!$('developerPlot').value||!$('gaid').value)lookupVilla();photos=[null,null];existingPhotos=[r.photo1||null,r.photo2||null];preview(1,r.photo1);preview(2,r.photo2);$('formTitle').textContent='Edit villa record';setStatus('Record loaded. New photos replace the existing photo in that slot.');window.scrollTo({top:0,behavior:'smooth'})}
+async function loadRecord(id){const r=(await allRecords()).find(x=>x.id===id);if(!r)return;ocrAutoValues.dewa='';ocrAutoValues.mac='';$('recordId').value=r.id;$('villa').value=r.villa||'';$('cluster').value=normalizeCluster(r.cluster)||'';$('dewa').value=r.dewa||'';$('mac').value=r.mac||'';$('developerPlot').value=r.developerPlot||'';$('gaid').value=r.gaid||'';if(!$('developerPlot').value||!$('gaid').value)lookupVilla();photos=[null,null];existingPhotos=[r.photo1||null,r.photo2||null];preview(1,r.photo1);preview(2,r.photo2);$('formTitle').textContent='Edit villa record';setStatus('Record loaded. New photos replace the existing photo in that slot.');window.scrollTo({top:0,behavior:'smooth'})}
 for(let i=1;i<=2;i++)$('photo'+i).addEventListener('change',async e=>{
  const f=e.target.files[0];if(!f)return;
  const villa=$('villa').value.trim();

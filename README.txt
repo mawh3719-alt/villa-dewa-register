@@ -2,7 +2,7 @@ VILLA DEWA REGISTER — UPDATED ANDROID WEB APP (PWA)
 
 WHAT IS INCLUDED
 - Villa entry and saved-record search/edit/delete.
-- DEWA Sr. No. and MAC Number fields with automatic photo OCR, manual re-scan buttons, visible progress, and recognised-text diagnostics.
+- DEWA Sr. No. and MAC Number fields with automatic photo OCR, manual re-scan buttons, visible progress, exact OCR crop preview, and recognised-text diagnostics. DEWA and MAC inputs remain editable.
 - Automatic Developer Plot No. and GAID lookup for all 251 villas in Cluster 1 Phase 3A and all 145 villas in Cluster 2 Phase 3B (396 lookup records total).
 - Two photo slots per villa, with photos stored in the app's local browser database.
 - Excel export with both photos embedded in the matching villa row.
@@ -20,8 +20,9 @@ HOW PHOTO READING WORKS
 3. The app automatically starts OCR after the photo is selected. Keep the app open and connected to the internet while the engine downloads and scans.
 4. A **Read Photo 1** or **Read Photo 2** button is also available to retry a scan without taking the picture again.
 5. Progress and any OCR error are shown on screen. Open **Show text recognised from the last photo** to see the raw text returned by OCR if it did not identify a labelled field.
-6. Review the DEWA Sr. No. and MAC Number against the actual meter label and tap **Save villa record**. OCR is assistance only; it can misread characters or fail on blurred, reflective, small or unusual labels. Enter or correct any value manually.
-7. OCR uses Tesseract.js 5.1.1 and English language data from public CDNs. Internet access is required for the first scan and for Excel export. Photos and register data are not uploaded by this app to a server.
+6. Open **Preview the exact label area scanned** to verify the two narrow text strips. Only those two upper-right label strips are sent to OCR; the full meter photo is never scanned. The barcode and most surrounding graphics are excluded.
+7. Review the DEWA Sr. No. and MAC Number against the actual meter label and tap **Save villa record**. Both fields remain editable. OCR fills blank fields and can update its own previous OCR result, but it will not overwrite a value you manually changed. OCR is assistance only; it can misread characters or fail on blurred, reflective, small or unusual labels. Enter or correct any value manually.
+8. OCR uses Tesseract.js 5.1.1 and English language data from public CDNs. Internet access is required for the first scan and for Excel export. Photos and register data are not uploaded by this app to a server.
 
 PUBLISH / INSTALL
 This is an installable Progressive Web App (PWA), not a native APK. It needs to be hosted over HTTPS. GitHub Pages is one free option:
@@ -30,7 +31,7 @@ This is an installable Progressive Web App (PWA), not a native APK. It needs to 
 3. In repository Settings > Pages, choose Deploy from a branch, select main and /(root), then Save.
 4. Open the published HTTPS URL in Chrome on your Android phone.
 5. Use Chrome menu > Install app / Add to Home screen.
-6. Open the installed app while online. This build uses a new v3 service-worker cache name to force the fixed page to replace the earlier cached version. Close and reopen the app after it updates. If the old page still appears, open the published website in Chrome, refresh it, then relaunch the installed app.
+6. Open the installed app while online. This build uses a new v7 service-worker cache name to force the fixed page to replace the earlier cached version. Close and reopen the app after it updates. If the old page still appears, open the published website in Chrome, refresh it, then relaunch the installed app.
 
 PRIVACY AND DATA SAFETY
 - Villa records and photos are stored locally in the browser's IndexedDB on that device. The app does not upload them to a server.
