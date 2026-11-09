@@ -45,3 +45,11 @@ OCR TROUBLESHOOTING
 - If the progress stops or an error appears, note the exact error shown below the photo area.
 - If the raw OCR text is readable but the fields remain blank, the meter label may use different wording; use the displayed text to enter the value manually and share a clear label photo for further tuning.
 - The app must be served over HTTPS (such as GitHub Pages). It will not run browser camera/OCR features correctly from a local file opened directly on the phone.
+
+
+OCR FIX v4 – ISKRA / SILVER SPRING DEWA LABEL
+This version first scans an enlarged, enhanced crop of the upper-right communications label,
+where the supplied meter sample prints "DEWA SN" and "MAC". If either value is not detected,
+the app scans the full photograph as a fallback. Review the extracted values against the meter
+label before saving. This profile is tuned to the sample meter style supplied by the user;
+other meter label layouts may need a different crop profile.

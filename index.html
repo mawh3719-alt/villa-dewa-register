@@ -33,7 +33,7 @@ button{border:0;border-radius:9px;padding:12px 14px;font-weight:700;font-size:14
 </style>
 </head>
 <body>
-<header><h1>Villa DEWA Register</h1><p>Villa details • Auto-read DEWA / MAC • Plot & GAID lookup • OCR Fix v3</p></header>
+<header><h1>Villa DEWA Register</h1><p>Villa details • Auto-read DEWA / MAC • Plot & GAID lookup • OCR Fix v4</p></header>
 <main>
 <section class="card">
 <h2 id="formTitle">Add villa record</h2>
@@ -144,19 +144,29 @@ async function getOCRWorker(){
  }
  return ocrWorkerPromise;
 }
-async function prepareOCRImage(blob){
+async function prepareOCRImage(blob, mode='label'){
  if(!window.createImageBitmap)return blob;
  const bitmap=await createImageBitmap(blob);
- const maxSide=2200,scale=Math.min(1,maxSide/Math.max(bitmap.width,bitmap.height));
+ const w=bitmap.width,h=bitmap.height;
  const canvas=document.createElement('canvas');
- canvas.width=Math.max(1,Math.round(bitmap.width*scale));
- canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+ let sx=0,sy=0,sw=w,sh=h;
+ // On the supplied ISKRA / Silver Spring DEWA meter, the DEWA SN and MAC
+ // are printed together on the upper-right communications label.
+ if(mode==='label'){
+   sx=Math.round(w*0.55); sy=Math.round(h*0.15);
+   sw=Math.round(w*0.34); sh=Math.round(h*0.20);
+ }
+ const scale=mode==='label'?3.5:Math.min(1,2200/Math.max(w,h));
+ canvas.width=Math.max(1,Math.round(sw*scale));
+ canvas.height=Math.max(1,Math.round(sh*scale));
  const ctx=canvas.getContext('2d',{willReadFrequently:true});
- ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close?.();
+ ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+ ctx.drawImage(bitmap,sx,sy,sw,sh,0,0,canvas.width,canvas.height);
+ bitmap.close?.();
  const image=ctx.getImageData(0,0,canvas.width,canvas.height);
  for(let i=0;i<image.data.length;i+=4){
    const gray=0.299*image.data[i]+0.587*image.data[i+1]+0.114*image.data[i+2];
-   const enhanced=Math.max(0,Math.min(255,(gray-128)*1.25+128));
+   const enhanced=Math.max(0,Math.min(255,(gray-118)*1.65+138));
    image.data[i]=image.data[i+1]=image.data[i+2]=enhanced;
  }
  ctx.putImageData(image,0,0);
@@ -181,7 +191,7 @@ function findLabelValue(lines,labelPattern,minLength=5){
 }
 function extractDewaMac(text){
  const lines=String(text||'').replace(/\r/g,'\n').split('\n').map(x=>x.replace(/[|]/g,'I').trim()).filter(Boolean);
- const dewaLabel=/(?:\bDEWA\s*)?\b(?:S\s*\/?\s*N|SR\.?\s*(?:NO\.?|NUMBER)|SERIAL(?:\s*(?:NO\.?|NUMBER))?|METER\s*(?:S\s*\/?\s*N|NO\.?|NUMBER|SERIAL)|MTR\.?\s*(?:NO\.?|S\s*\/?\s*N))\b/i;
+ const dewaLabel=/(?:\bDEWA\s*(?:S\s*\.?\s*N\.?|SERIAL(?:\s*(?:NO\.?|NUMBER))?|S\s*\/?\s*N)\b|\b(?:S\s*\/?\s*N|SR\.?\s*(?:NO\.?|NUMBER)|SERIAL(?:\s*(?:NO\.?|NUMBER))?|METER\s*(?:S\s*\/?\s*N|NO\.?|NUMBER|SERIAL)|MTR\.?\s*(?:NO\.?|S\s*\/?\s*N))\b)/i;
  const macLabel=/\bMAC(?:\s*(?:ADDRESS|NO\.?|NUMBER|ID))?\b/i;
  return {
    dewa:findLabelValue(lines,dewaLabel,5),
@@ -196,11 +206,24 @@ async function readPhoto(blob,slot){
  try{
    const worker=await getOCRWorker();
    setOCRStatus('Reading Photo '+slot+'…');
-   const image=await prepareOCRImage(blob);
-   const result=await worker.recognize(image);
-   const rawText=String(result?.data?.text||'').trim();
+   // First scan the small printed identification strip at the top-right.
+   // If either value is missed, scan the full photo as a fallback.
+   const labelImage=await prepareOCRImage(blob,'label');
+   const labelResult=await worker.recognize(labelImage);
+   let rawText=String(labelResult?.data?.text||'').trim();
+   let found=extractDewaMac(rawText);
+   let confidence=Number(labelResult?.data?.confidence||0);
+   if(!found.dewa||!found.mac){
+     setOCRStatus('The close-up label scan was incomplete. Checking the full photo…');
+     const fullImage=await prepareOCRImage(blob,'full');
+     const fullResult=await worker.recognize(fullImage);
+     const fullText=String(fullResult?.data?.text||'').trim();
+     rawText=[rawText,fullText].filter(Boolean).join('\\n--- FULL PHOTO SCAN ---\\n');
+     const fullFound=extractDewaMac(fullText);
+     found={dewa:found.dewa||fullFound.dewa,mac:found.mac||fullFound.mac};
+     confidence=Math.max(confidence,Number(fullResult?.data?.confidence||0));
+   }
    $('ocrRaw').textContent=rawText||'(No text was recognised in this photo.)';
-   const found=extractDewaMac(rawText);
    const updated=[];
    if(found.dewa&&(!$('dewa').value.trim()||$('dewa').value.trim()===ocrAutoValues.dewa)){
      $('dewa').value=found.dewa;ocrAutoValues.dewa=found.dewa;updated.push('DEWA Sr. No.');
@@ -208,7 +231,7 @@ async function readPhoto(blob,slot){
    if(found.mac&&(!$('mac').value.trim()||$('mac').value.trim()===ocrAutoValues.mac)){
      $('mac').value=found.mac;ocrAutoValues.mac=found.mac;updated.push('MAC Number');
    }
-   const confidence=Number(result?.data?.confidence||0);
+   
    if(updated.length){
      setOCRStatus('Photo '+slot+': OCR found '+updated.join(' and ')+(confidence>0?' (overall text confidence '+Math.round(confidence)+'%)':'')+'. Check both fields against the label, then tap Save villa record.');
    }else if(found.dewa||found.mac){
