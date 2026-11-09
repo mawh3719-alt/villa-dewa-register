@@ -55,8 +55,15 @@ label before saving. This profile is tuned to the sample meter style supplied by
 other meter label layouts may need a different crop profile.
 
 
-OCR FIX v5
+OCR FIX v6
 The label parser now explicitly recognises the printed labels "DEWA SN:" and "MAC:",
 extracts values on the same line or following OCR lines, normalises spaces/punctuation,
 and updates the DEWA Sr. No. and MAC Number fields whenever a value is detected.
 The OCR values should still be visually checked before saving.
+
+
+OCR FIX v6 – UPPER-RIGHT CORNER ONLY
+- OCR is restricted to a crop of the upper-right 50% of the photo and the top 36% of its height.
+- The full photograph is never scanned as a fallback.
+- If the DEWA SN or MAC is not found in that crop, the app reports the issue and leaves the fields editable.
+- The crop is enlarged before OCR to improve recognition of the small printed label.

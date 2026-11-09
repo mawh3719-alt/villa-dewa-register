@@ -33,7 +33,7 @@ button{border:0;border-radius:9px;padding:12px 14px;font-weight:700;font-size:14
 </style>
 </head>
 <body>
-<header><h1>Villa DEWA Register</h1><p>Villa details • Auto-read DEWA SN / MAC • Plot & GAID lookup • OCR Fix v5</p></header>
+<header><h1>Villa DEWA Register</h1><p>Villa details • Auto-read DEWA SN / MAC • Plot & GAID lookup • OCR Fix v6</p></header>
 <main>
 <section class="card">
 <h2 id="formTitle">Add villa record</h2>
@@ -144,19 +144,16 @@ async function getOCRWorker(){
  }
  return ocrWorkerPromise;
 }
-async function prepareOCRImage(blob, mode='label'){
- if(!window.createImageBitmap)return blob;
+async function prepareOCRImage(blob){
+ if(!window.createImageBitmap)throw new Error('This browser cannot crop the photo for corner-only OCR. Please use the latest Google Chrome on Android.');
  const bitmap=await createImageBitmap(blob);
  const w=bitmap.width,h=bitmap.height;
  const canvas=document.createElement('canvas');
- let sx=0,sy=0,sw=w,sh=h;
- // On the supplied ISKRA / Silver Spring DEWA meter, the DEWA SN and MAC
- // are printed together on the upper-right communications label.
- if(mode==='label'){
-   sx=Math.round(w*0.55); sy=Math.round(h*0.15);
-   sw=Math.round(w*0.34); sh=Math.round(h*0.20);
- }
- const scale=mode==='label'?3.5:Math.min(1,2200/Math.max(w,h));
+ // STRICT CROP: only the upper-right corner containing the DEWA SN / MAC label.
+ // No full-photo OCR fallback is permitted.
+ const sx=Math.round(w*0.50), sy=0;
+ const sw=Math.round(w*0.50), sh=Math.round(h*0.36);
+ const scale=4.5;
  canvas.width=Math.max(1,Math.round(sw*scale));
  canvas.height=Math.max(1,Math.round(sh*scale));
  const ctx=canvas.getContext('2d',{willReadFrequently:true});
@@ -217,23 +214,12 @@ async function readPhoto(blob,slot){
  try{
    const worker=await getOCRWorker();
    setOCRStatus('Reading Photo '+slot+'…');
-   // First scan the small printed identification strip at the top-right.
-   // If either value is missed, scan the full photo as a fallback.
-   const labelImage=await prepareOCRImage(blob,'label');
+   // STRICT: scan only the upper-right corner crop. Never scan the full photograph.
+   const labelImage=await prepareOCRImage(blob);
    const labelResult=await worker.recognize(labelImage);
-   let rawText=String(labelResult?.data?.text||'').trim();
-   let found=extractDewaMac(rawText);
-   let confidence=Number(labelResult?.data?.confidence||0);
-   if(!found.dewa||!found.mac){
-     setOCRStatus('The close-up label scan was incomplete. Checking the full photo…');
-     const fullImage=await prepareOCRImage(blob,'full');
-     const fullResult=await worker.recognize(fullImage);
-     const fullText=String(fullResult?.data?.text||'').trim();
-     rawText=[rawText,fullText].filter(Boolean).join('\\n--- FULL PHOTO SCAN ---\\n');
-     const fullFound=extractDewaMac(fullText);
-     found={dewa:found.dewa||fullFound.dewa,mac:found.mac||fullFound.mac};
-     confidence=Math.max(confidence,Number(fullResult?.data?.confidence||0));
-   }
+   const rawText=String(labelResult?.data?.text||'').trim();
+   const found=extractDewaMac(rawText);
+   const confidence=Number(labelResult?.data?.confidence||0);
    $('ocrRaw').textContent=rawText||'(No text was recognised in this photo.)';
    const updated=[];
    if(found.dewa){
@@ -248,7 +234,7 @@ async function readPhoto(blob,slot){
    }else if(found.dewa||found.mac){
      setOCRStatus('Photo '+slot+': text was recognised, but a field already contained a value and was not overwritten. Check the fields and correct them if needed.');
    }else if(rawText){
-     setOCRStatus('Photo '+slot+': OCR ran, but it could not confidently match the DEWA serial or MAC label. Open “Show text recognised” below to check what it read. Try a closer, upright photo with less glare.');
+     setOCRStatus('Photo '+slot+': OCR ran, but it could not confidently match the DEWA serial or MAC label. Open “Show text recognised” below to check what it read. Only the upper-right corner was scanned. Reframe that corner closer, upright and without glare, then retry.');
    }else{
      setOCRStatus('Photo '+slot+': OCR ran but found no readable text. Retake the picture closer, upright and in better light.');
    }
