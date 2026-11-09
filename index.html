@@ -23,7 +23,7 @@ button{border:0;border-radius:9px;padding:12px 14px;font-weight:700;font-size:14
 .photo-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .photo-slot{border:1px dashed #9aabba;border-radius:11px;padding:10px;text-align:center;background:#f8fafc;min-height:145px}
 .photo-slot img{width:100%;height:125px;object-fit:contain;background:#eef2f5;border-radius:7px}
-.photo-slot button{width:100%;margin-top:8px}
+.photo-slot button{width:100%;margin-top:8px}.photo-slot button:disabled{opacity:.45;cursor:not-allowed}details.ocr-note{margin-top:7px}details.ocr-note summary{cursor:pointer;font-weight:700}
 .photo-slot small{display:block;color:#64748b;margin-top:5px}
 .record{display:flex;justify-content:space-between;gap:10px;align-items:center;border-bottom:1px solid #e5eaf0;padding:11px 0}
 .record:last-child{border-bottom:0}.record strong{display:block}.muted{color:#64748b;font-size:12px;margin-top:4px}
@@ -33,7 +33,7 @@ button{border:0;border-radius:9px;padding:12px 14px;font-weight:700;font-size:14
 </style>
 </head>
 <body>
-<header><h1>Villa DEWA Register</h1><p>Villa details • Auto-read DEWA / MAC • Plot & GAID lookup</p></header>
+<header><h1>Villa DEWA Register</h1><p>Villa details • Auto-read DEWA / MAC • Plot & GAID lookup • OCR Fix v3</p></header>
 <main>
 <section class="card">
 <h2 id="formTitle">Add villa record</h2>
@@ -52,22 +52,25 @@ button{border:0;border-radius:9px;padding:12px 14px;font-weight:700;font-size:14
   <div id="photo1Preview" class="muted">No photo captured</div>
   <button class="secondary" type="button" onclick="document.getElementById('photo1').click()">📷 Capture Photo 1</button>
   <input id="photo1" class="hidden" type="file" accept="image/*" capture="environment">
-  <small>Camera opens on supported Android browsers</small>
+  <button class="secondary" id="scanPhoto1" type="button" disabled>Read Photo 1</button>
+  <small>Photo is scanned automatically; use Read Photo to retry</small>
  </div>
  <div class="photo-slot">
   <div id="photo2Preview" class="muted">No photo captured</div>
   <button class="secondary" type="button" onclick="document.getElementById('photo2').click()">📷 Capture Photo 2</button>
   <input id="photo2" class="hidden" type="file" accept="image/*" capture="environment">
-  <small>Camera opens on supported Android browsers</small>
+  <button class="secondary" id="scanPhoto2" type="button" disabled>Read Photo 2</button>
+  <small>Photo is scanned automatically; use Read Photo to retry</small>
  </div>
 </div>
-<div id="ocrStatus" class="ocr-note">Capture a clear, close-up photo of the meter label. The app will try to read the DEWA Sr. No. and MAC Number, then fill the fields for your review. Check every digit before saving.</div>
+<div id="ocrStatus" class="ocr-note" role="status" aria-live="polite">Enter the villa and cluster, then capture a clear, close-up photo of the meter label. OCR will start automatically. You can also tap Read Photo to retry.</div>
+<details id="ocrRawWrap" class="ocr-note"><summary>Show text recognised from the last photo</summary><pre id="ocrRaw" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0 0"></pre></details>
 <div class="actions">
  <button class="primary" id="saveBtn" type="button">Save villa record</button>
  <button class="secondary" id="newBtn" type="button">New / Clear</button>
 </div>
 <div id="status" class="status" role="status"></div>
-<p class="note">Photos are stored with this record on this device. The supplied Cluster 1 and Cluster 2 schedules cover 396 villas and automatically fill Developer Plot No. and GAID from the selected cluster and villa number. OCR requires internet access. Always compare the extracted meter details with the original label before saving.</p>
+<p class="note">Photos are stored with this record on this device. The supplied Cluster 1 and Cluster 2 schedules cover 396 villas and automatically fill Developer Plot No. and GAID from the selected cluster and villa number. OCR requires internet access for the first scan and downloads its text engine once. Keep the app open during scanning. Always compare extracted meter details with the original label before saving.</p>
 </section>
 
 <section class="card">
@@ -84,7 +87,7 @@ button{border:0;border-radius:9px;padding:12px 14px;font-weight:700;font-size:14
 </section>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script src="./villa-lookup.js"></script>
 <script>
 const DB_NAME='VillaDewaRegisterDB', STORE='records';
@@ -118,9 +121,27 @@ function lookupVilla(){
  }
 }
 let ocrWorkerPromise=null;
+function updateOCRProgress(message){
+ const status=String(message.status||'');
+ const pct=Number.isFinite(message.progress)?Math.round(message.progress*100):null;
+ if(status.includes('loading tesseract core')) setOCRStatus('Starting text recognition engine…');
+ else if(status.includes('initializing tesseract')) setOCRStatus('Initialising OCR…');
+ else if(status.includes('loading language traineddata')) setOCRStatus('Downloading English text data'+(pct!==null?' ('+pct+'%)':'')+'. Keep the app open and connected to the internet.');
+ else if(status.includes('initializing api')) setOCRStatus('Preparing OCR engine…');
+ else if(status.includes('recognizing text')) setOCRStatus('Reading the meter label'+(pct!==null?' ('+pct+'%)':'')+'.');
+}
 async function getOCRWorker(){
- if(!window.Tesseract)throw new Error('Text recognition library could not load. Check your internet connection.');
- if(!ocrWorkerPromise)ocrWorkerPromise=Tesseract.createWorker('eng').catch(err=>{ocrWorkerPromise=null;throw err});
+ if(!window.Tesseract || typeof window.Tesseract.createWorker!=='function'){
+   throw new Error('Tesseract library did not load. Reopen the app with internet access and refresh it.');
+ }
+ if(!ocrWorkerPromise){
+   ocrWorkerPromise=window.Tesseract.createWorker('eng', 1, {
+     workerPath:'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',
+     langPath:'https://tessdata.projectnaptha.com/4.0.0',
+     corePath:'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1',
+     logger:updateOCRProgress
+   }).catch(err=>{ocrWorkerPromise=null;throw err});
+ }
  return ocrWorkerPromise;
 }
 async function prepareOCRImage(blob){
@@ -168,12 +189,18 @@ function extractDewaMac(text){
  };
 }
 async function readPhoto(blob,slot){
- setOCRStatus('Reading Photo '+slot+'… Keep the app open. The first scan may take longer while text recognition loads.');
+ if(!blob){setOCRStatus('No photo is available to scan. Capture Photo '+slot+' first.');return}
+ $('ocrRaw').textContent='OCR has not returned any text yet.';
+ $('ocrRawWrap').open=true;
+ setOCRStatus('Starting OCR for Photo '+slot+'… The first scan may take longer while the engine and English text data download. Keep the app open and online.');
  try{
    const worker=await getOCRWorker();
+   setOCRStatus('Reading Photo '+slot+'…');
    const image=await prepareOCRImage(blob);
    const result=await worker.recognize(image);
-   const found=extractDewaMac(result.data.text||'');
+   const rawText=String(result?.data?.text||'').trim();
+   $('ocrRaw').textContent=rawText||'(No text was recognised in this photo.)';
+   const found=extractDewaMac(rawText);
    const updated=[];
    if(found.dewa&&(!$('dewa').value.trim()||$('dewa').value.trim()===ocrAutoValues.dewa)){
      $('dewa').value=found.dewa;ocrAutoValues.dewa=found.dewa;updated.push('DEWA Sr. No.');
@@ -181,21 +208,30 @@ async function readPhoto(blob,slot){
    if(found.mac&&(!$('mac').value.trim()||$('mac').value.trim()===ocrAutoValues.mac)){
      $('mac').value=found.mac;ocrAutoValues.mac=found.mac;updated.push('MAC Number');
    }
-   const confidence=Number(result.data.confidence||0);
+   const confidence=Number(result?.data?.confidence||0);
    if(updated.length){
-     setOCRStatus('Photo '+slot+': detected '+updated.join(' and ')+(confidence? ' (overall OCR confidence '+Math.round(confidence)+'%)':'')+'. Verify the values against the meter label, then tap Save villa record.');
+     setOCRStatus('Photo '+slot+': OCR found '+updated.join(' and ')+(confidence>0?' (overall text confidence '+Math.round(confidence)+'%)':'')+'. Check both fields against the label, then tap Save villa record.');
    }else if(found.dewa||found.mac){
-     setOCRStatus('Photo '+slot+': text was detected, but an existing field was kept unchanged. Check the DEWA Sr. No. and MAC Number and update them manually if required.');
+     setOCRStatus('Photo '+slot+': text was recognised, but a field already contained a value and was not overwritten. Check the fields and correct them if needed.');
+   }else if(rawText){
+     setOCRStatus('Photo '+slot+': OCR ran, but it could not confidently match the DEWA serial or MAC label. Open “Show text recognised” below to check what it read. Try a closer, upright photo with less glare.');
    }else{
-     setOCRStatus('Photo '+slot+' saved. The scan did not identify the DEWA Sr. No. or MAC Number. Try a sharper, closer photo with the label upright, or enter the values manually.');
+     setOCRStatus('Photo '+slot+': OCR ran but found no readable text. Retake the picture closer, upright and in better light.');
    }
  }catch(err){
-   setOCRStatus('Photo '+slot+' saved, but automatic text reading was unavailable. Check internet access and enter the DEWA Sr. No. and MAC Number manually.');
+   const reason=String(err?.message||err||'Unknown OCR error').replace(/\s+/g,' ').slice(0,220);
+   $('ocrRaw').textContent='OCR did not complete. Error: '+reason;
+   setOCRStatus('OCR could not run for Photo '+slot+'. '+reason+' Check that the phone is online, then tap Read Photo to retry.');
  }
 }
+async function scanSavedPhoto(slot){
+ const blob=photos[slot-1]||existingPhotos[slot-1];
+ if(!blob){setOCRStatus('Capture Photo '+slot+' before requesting a scan.');return}
+ await readPhoto(blob,slot);
+}
 
-function preview(slot, blob){const target=$('photo'+slot+'Preview');target.innerHTML='';if(blob){const img=document.createElement('img');img.src=URL.createObjectURL(blob);img.alt='Captured photo '+slot;target.appendChild(img)}else target.textContent='No photo captured'}
-function resetForm(){ $('recordId').value='';['villa','cluster','dewa','mac','developerPlot','gaid'].forEach(x=>$(x).value='');photos=[null,null];existingPhotos=[null,null];ocrAutoValues.dewa='';ocrAutoValues.mac='';$('photo1').value='';$('photo2').value='';preview(1,null);preview(2,null);$('formTitle').textContent='Add villa record';setStatus('');setOCRStatus('Capture a clear, close-up photo of the meter label. The app will try to read the DEWA Sr. No. and MAC Number, then fill the fields for your review. Check every digit before saving.')}
+function preview(slot, blob){const target=$('photo'+slot+'Preview');target.innerHTML='';if(blob){const img=document.createElement('img');img.src=URL.createObjectURL(blob);img.alt='Captured photo '+slot;target.appendChild(img)}else target.textContent='No photo captured';const scanButton=$('scanPhoto'+slot);if(scanButton)scanButton.disabled=!blob}
+function resetForm(){ $('recordId').value='';['villa','cluster','dewa','mac','developerPlot','gaid'].forEach(x=>$(x).value='');photos=[null,null];existingPhotos=[null,null];ocrAutoValues.dewa='';ocrAutoValues.mac='';$('photo1').value='';$('photo2').value='';preview(1,null);preview(2,null);$('ocrRaw').textContent='';$('ocrRawWrap').open=false;$('formTitle').textContent='Add villa record';setStatus('');setOCRStatus('Enter the villa and cluster, then capture a clear, close-up photo of the meter label. OCR will start automatically. You can also tap Read Photo to retry.')}
 async function refresh(){
  const records=await allRecords();
  // Backfill plot and GAID for records created before this lookup update.
@@ -225,6 +261,7 @@ for(let i=1;i<=2;i++)$('photo'+i).addEventListener('change',async e=>{
  await readPhoto(f,i);
 });
 $('saveBtn').onclick=async()=>{const villa=$('villa').value.trim();if(!villa){setStatus('Please enter a Villa Number.');$('villa').focus();return}const records=await allRecords();const id=$('recordId').value||crypto.randomUUID();const old=records.find(x=>x.id===id);const rec={id,serial:old?.serial||((Math.max(0,...records.map(x=>Number(x.serial)||0))+1)),villa,cluster:$('cluster').value,developerPlot:$('developerPlot').value,gaid:$('gaid').value,dewa:$('dewa').value.trim(),mac:$('mac').value.trim(),photo1:photos[0]||existingPhotos[0]||null,photo2:photos[1]||existingPhotos[1]||null,updatedAt:new Date().toISOString()};await putRecord(rec);resetForm();setStatus('Villa record saved successfully on this device.');await refresh()};
+$('scanPhoto1').onclick=()=>scanSavedPhoto(1);$('scanPhoto2').onclick=()=>scanSavedPhoto(2);
 $('newBtn').onclick=resetForm;$('search').oninput=refresh;$('villa').addEventListener('input',lookupVilla);$('cluster').addEventListener('change',lookupVilla);
 ['dewa','mac'].forEach(id=>$(id).addEventListener('input',()=>{if($(id).value.trim()!==ocrAutoValues[id])ocrAutoValues[id]=''}));
 $('exportBtn').onclick=async()=>{const records=await allRecords();if(!records.length){alert('No records to export.');return}if(!window.ExcelJS){alert('Excel export needs an internet connection to load the workbook library.');return}const wb=new ExcelJS.Workbook();wb.creator='Villa DEWA Register';const sh=wb.addWorksheet('Villa Register');sh.columns=[{header:'S.No',key:'serial',width:9},{header:'Villa Number',key:'villa',width:18},{header:'Cluster',key:'cluster',width:20},{header:'DEWA Sr. No.',key:'dewa',width:20},{header:'MAC Number',key:'mac',width:22},{header:'Developer Plot No.',key:'developerPlot',width:20},{header:'GAID Number',key:'gaid',width:34},{header:'Photo 1',key:'p1',width:28},{header:'Photo 2',key:'p2',width:28}];sh.getRow(1).height=26;sh.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};sh.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF163B5C'}};for(let i=0;i<records.length;i++){const r=records[i],row=i+2;sh.addRow({serial:i+1,villa:r.villa,cluster:r.cluster==='1'?'Cluster 1 – Phase 3A':r.cluster==='2'?'Cluster 2 – Phase 3B':r.cluster,dewa:r.dewa,mac:r.mac,developerPlot:r.developerPlot,gaid:r.gaid});sh.getRow(row).height=100;for(let c=1;c<=9;c++)sh.getRow(row).getCell(c).alignment={vertical:'middle',horizontal:'center',wrapText:true};for(const [slot,col] of [[1,8],[2,9]]){const blob=r['photo'+slot];if(blob){const data=await blob.arrayBuffer();let ext=(blob.type||'image/jpeg').includes('png')?'png':(blob.type||'').includes('gif')?'gif':'jpeg';const imageId=wb.addImage({buffer:data,extension:ext});sh.addImage(imageId,{tl:{col:col-1,row:row-1},br:{col:col,row:row},editAs:'oneCell'});}else sh.getRow(row).getCell(col).value='No photo';}}sh.views=[{state:'frozen',ySplit:1}];sh.autoFilter={from:'A1',to:'I'+(records.length+1)};const buf=await wb.xlsx.writeBuffer();const url=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const a=document.createElement('a');a.href=url;a.download='Villa_DEWA_MAC_Register.xlsx';a.click();URL.revokeObjectURL(url)};
