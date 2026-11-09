@@ -53,3 +53,10 @@ where the supplied meter sample prints "DEWA SN" and "MAC". If either value is n
 the app scans the full photograph as a fallback. Review the extracted values against the meter
 label before saving. This profile is tuned to the sample meter style supplied by the user;
 other meter label layouts may need a different crop profile.
+
+
+OCR FIX v5
+The label parser now explicitly recognises the printed labels "DEWA SN:" and "MAC:",
+extracts values on the same line or following OCR lines, normalises spaces/punctuation,
+and updates the DEWA Sr. No. and MAC Number fields whenever a value is detected.
+The OCR values should still be visually checked before saving.

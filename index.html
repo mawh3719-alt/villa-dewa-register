@@ -33,7 +33,7 @@ button{border:0;border-radius:9px;padding:12px 14px;font-weight:700;font-size:14
 </style>
 </head>
 <body>
-<header><h1>Villa DEWA Register</h1><p>Villa details • Auto-read DEWA / MAC • Plot & GAID lookup • OCR Fix v4</p></header>
+<header><h1>Villa DEWA Register</h1><p>Villa details • Auto-read DEWA SN / MAC • Plot & GAID lookup • OCR Fix v5</p></header>
 <main>
 <section class="card">
 <h2 id="formTitle">Add villa record</h2>
@@ -53,14 +53,14 @@ button{border:0;border-radius:9px;padding:12px 14px;font-weight:700;font-size:14
   <button class="secondary" type="button" onclick="document.getElementById('photo1').click()">📷 Capture Photo 1</button>
   <input id="photo1" class="hidden" type="file" accept="image/*" capture="environment">
   <button class="secondary" id="scanPhoto1" type="button" disabled>Read Photo 1</button>
-  <small>Photo is scanned automatically; use Read Photo to retry</small>
+  <small>Photo is scanned automatically. OCR reads the DEWA SN: and MAC: labels.</small>
  </div>
  <div class="photo-slot">
   <div id="photo2Preview" class="muted">No photo captured</div>
   <button class="secondary" type="button" onclick="document.getElementById('photo2').click()">📷 Capture Photo 2</button>
   <input id="photo2" class="hidden" type="file" accept="image/*" capture="environment">
   <button class="secondary" id="scanPhoto2" type="button" disabled>Read Photo 2</button>
-  <small>Photo is scanned automatically; use Read Photo to retry</small>
+  <small>Photo is scanned automatically. OCR reads the DEWA SN: and MAC: labels.</small>
  </div>
 </div>
 <div id="ocrStatus" class="ocr-note" role="status" aria-live="polite">Enter the villa and cluster, then capture a clear, close-up photo of the meter label. OCR will start automatically. You can also tap Read Photo to retry.</div>
@@ -172,31 +172,42 @@ async function prepareOCRImage(blob, mode='label'){
  ctx.putImageData(image,0,0);
  return canvas;
 }
-function findLabelValue(lines,labelPattern,minLength=5){
- const ignored=new Set(['DEWA','SERIAL','METER','NUMBER','MAC','ADDRESS','NO','SR','DUBAI','ELECTRICITY','WATER','AUTHORITY','S','N','ID']);
- for(let i=0;i<lines.length;i++){
-   const line=lines[i];labelPattern.lastIndex=0;const match=labelPattern.exec(line);
-   if(!match)continue;
-   const candidates=[line.slice(match.index+match[0].length),lines[i+1]||'',lines[i+2]||''];
-   for(let j=0;j<candidates.length;j++){
-     const segment=String(candidates[j]||'').replace(/^\s*(?:NO\.?|NUMBER|ADDRESS|ID)?\s*[:#=\-–—.]*/i,' ');
-     const tokens=segment.match(/[A-Z0-9][A-Z0-9._:/-]{4,}/gi)||[];
-     for(const token of tokens){
-       const alnum=token.replace(/[^A-Z0-9]/gi,'');
-       if(alnum.length>=minLength&&!ignored.has(token.toUpperCase()))return token.replace(/[.,;]+$/,'');
-     }
-   }
- }
- return '';
+function cleanMeterValue(value){
+ return String(value||'').toUpperCase().replace(/[^A-Z0-9]/g,'').trim();
 }
 function extractDewaMac(text){
- const lines=String(text||'').replace(/\r/g,'\n').split('\n').map(x=>x.replace(/[|]/g,'I').trim()).filter(Boolean);
- const dewaLabel=/(?:\bDEWA\s*(?:S\s*\.?\s*N\.?|SERIAL(?:\s*(?:NO\.?|NUMBER))?|S\s*\/?\s*N)\b|\b(?:S\s*\/?\s*N|SR\.?\s*(?:NO\.?|NUMBER)|SERIAL(?:\s*(?:NO\.?|NUMBER))?|METER\s*(?:S\s*\/?\s*N|NO\.?|NUMBER|SERIAL)|MTR\.?\s*(?:NO\.?|S\s*\/?\s*N))\b)/i;
- const macLabel=/\bMAC(?:\s*(?:ADDRESS|NO\.?|NUMBER|ID))?\b/i;
- return {
-   dewa:findLabelValue(lines,dewaLabel,5),
-   mac:findLabelValue(lines,macLabel,6)
+ const raw=String(text||'').toUpperCase().replace(/[|]/g,'I').replace(/\r/g,'\n');
+ const compact=raw.replace(/\s+/g,' ');
+ const lines=raw.split('\n').map(x=>x.trim()).filter(Boolean);
+ const findAfterLabel=(labelRegex,min,max)=>{
+   // Match the label and value on the same line or shortly after it.
+   const m=labelRegex.exec(compact);
+   if(m){
+     const tail=compact.slice(m.index+m[0].length, m.index+m[0].length+90);
+     const tokens=tail.match(/[A-Z0-9]{5,24}/g)||[];
+     for(const t of tokens){
+       const v=cleanMeterValue(t);
+       if(v.length>=min&&v.length<=max&&!/^(DEWA|SERIAL|NUMBER|METER|MAC|ADDRESS|DUBAI|ELECTRICITY|WATER|AUTHORITY)$/.test(v))return v;
+     }
+   }
+   // OCR sometimes puts the value on the following line.
+   for(let i=0;i<lines.length;i++){
+     if(labelRegex.test(lines[i])){
+       for(const candidate of [lines[i].replace(labelRegex,''),lines[i+1]||'',lines[i+2]||'']){
+         const tokens=candidate.match(/[A-Z0-9]{5,24}/g)||[];
+         for(const t of tokens){
+           const v=cleanMeterValue(t);
+           if(v.length>=min&&v.length<=max&&!/^(DEWA|SERIAL|NUMBER|METER|MAC|ADDRESS|DUBAI|ELECTRICITY|WATER|AUTHORITY)$/.test(v))return v;
+         }
+       }
+     }
+   }
+   return '';
  };
+ // The supplied meter prints "DEWA SN: RFT1338082" and "MAC: 0013500B0008CF32".
+ const dewa=findAfterLabel(/\bDEWA\s*(?:S\s*\.?\s*N\.?|SN|S\/N)\s*[:#=-]?\s*/i,8,16);
+ const mac=findAfterLabel(/\bMAC\s*(?:ADDRESS|NO\.?|NUMBER)?\s*[:#=-]?\s*/i,12,20);
+ return {dewa,mac};
 }
 async function readPhoto(blob,slot){
  if(!blob){setOCRStatus('No photo is available to scan. Capture Photo '+slot+' first.');return}
@@ -225,10 +236,10 @@ async function readPhoto(blob,slot){
    }
    $('ocrRaw').textContent=rawText||'(No text was recognised in this photo.)';
    const updated=[];
-   if(found.dewa&&(!$('dewa').value.trim()||$('dewa').value.trim()===ocrAutoValues.dewa)){
+   if(found.dewa){
      $('dewa').value=found.dewa;ocrAutoValues.dewa=found.dewa;updated.push('DEWA Sr. No.');
    }
-   if(found.mac&&(!$('mac').value.trim()||$('mac').value.trim()===ocrAutoValues.mac)){
+   if(found.mac){
      $('mac').value=found.mac;ocrAutoValues.mac=found.mac;updated.push('MAC Number');
    }
    
