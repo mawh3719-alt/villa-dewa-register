@@ -33,7 +33,7 @@ button{border:0;border-radius:9px;padding:12px 14px;font-weight:700;font-size:14
 </style>
 </head>
 <body>
-<header><h1>Villa DEWA Register</h1><p>Villa details • Auto-read DEWA SN / MAC • Plot & GAID lookup • OCR Fix v7</p></header>
+<header><h1>Villa DEWA Register</h1><p>Villa details • 3 photographs • Photo 3 reads DEWA SN / MAC • Plot & GAID lookup</p></header>
 <main>
 <section class="card">
 <h2 id="formTitle">Add villa record</h2>
@@ -52,18 +52,23 @@ button{border:0;border-radius:9px;padding:12px 14px;font-weight:700;font-size:14
   <div id="photo1Preview" class="muted">No photo captured</div>
   <button class="secondary" type="button" onclick="document.getElementById('photo1').click()">📷 Capture Photo 1</button>
   <input id="photo1" class="hidden" type="file" accept="image/*" capture="environment">
-  <button class="secondary" id="scanPhoto1" type="button" disabled>Read Photo 1</button>
-  <small>Photo is scanned automatically. OCR reads only the DEWA SN: and MAC: text lines. You can edit both fields before saving.</small>
+  <small>General meter photograph. No OCR is performed on this photo.</small>
  </div>
  <div class="photo-slot">
   <div id="photo2Preview" class="muted">No photo captured</div>
   <button class="secondary" type="button" onclick="document.getElementById('photo2').click()">📷 Capture Photo 2</button>
   <input id="photo2" class="hidden" type="file" accept="image/*" capture="environment">
-  <button class="secondary" id="scanPhoto2" type="button" disabled>Read Photo 2</button>
-  <small>Photo is scanned automatically. OCR reads only the DEWA SN: and MAC: text lines. You can edit both fields before saving.</small>
+  <small>Additional meter photograph. No OCR is performed on this photo.</small>
+ </div>
+ <div class="photo-slot">
+  <div id="photo3Preview" class="muted">No photo captured</div>
+  <button class="secondary" type="button" onclick="document.getElementById('photo3').click()">📷 Capture Photo 3 – DEWA Label</button>
+  <input id="photo3" class="hidden" type="file" accept="image/*" capture="environment">
+  <button class="secondary" id="scanPhoto3" type="button" disabled>Read Photo 3</button>
+  <small><strong>OCR photo:</strong> Capture the upper-right DEWA identification label clearly. Only Photo 3 is scanned for DEWA SN and MAC. Both fields remain editable.</small>
  </div>
 </div>
-<div id="ocrStatus" class="ocr-note" role="status" aria-live="polite">Enter the villa and cluster, then capture a clear, close-up photo of the meter label. OCR will start automatically. You can also tap Read Photo to retry.</div>
+<div id="ocrStatus" class="ocr-note" role="status" aria-live="polite">Enter the villa and cluster. Capture your general views in Photos 1 and 2, then capture the DEWA identification label in Photo 3. Only Photo 3 is scanned for DEWA SN and MAC.</div>
 <details id="ocrPreviewWrap" class="ocr-note"><summary>Preview the exact label area scanned</summary><img id="ocrCropPreview" class="ocr-crop-preview" alt="Cropped DEWA SN and MAC label area scanned by OCR"><p class="muted">Only the two narrow text strips shown here are sent to OCR. The rest of the meter photo is not scanned.</p></details>
 <details id="ocrRawWrap" class="ocr-note"><summary>Show text recognised from the last photo</summary><pre id="ocrRaw" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0 0"></pre></details>
 <div class="actions">
@@ -84,7 +89,7 @@ button{border:0;border-radius:9px;padding:12px 14px;font-weight:700;font-size:14
  <button class="secondary" id="restoreBtn" type="button">Restore backup</button>
  <input id="restoreFile" class="hidden" type="file" accept="application/json">
 </div>
-<p class="note">Export creates an Excel workbook with DEWA Sr. No., MAC Number, Developer Plot No., GAID and both photographs embedded in each villa row. Back up your records regularly or transfer them to another device.</p>
+<p class="note">Export creates an Excel workbook with DEWA Sr. No., MAC Number, Developer Plot No., GAID and all three photographs embedded in each villa row. Back up your records regularly or transfer them to another device.</p>
 </section>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
@@ -92,7 +97,7 @@ button{border:0;border-radius:9px;padding:12px 14px;font-weight:700;font-size:14
 <script src="./villa-lookup.js"></script>
 <script>
 const DB_NAME='VillaDewaRegisterDB', STORE='records';
-let db, photos=[null,null], existingPhotos=[null,null];
+let db, photos=[null,null,null], existingPhotos=[null,null,null];
 const VILLA_LOOKUP=window.VILLA_LOOKUP||{};
 const ocrAutoValues={dewa:'',mac:''};
 const $=id=>document.getElementById(id);
@@ -229,7 +234,7 @@ async function readPhoto(blob,slot){
  if(!blob){setOCRStatus('No photo is available to scan. Capture Photo '+slot+' first.');return}
  $('ocrRaw').textContent='OCR has not returned any text yet.';
  $('ocrRawWrap').open=true;
- setOCRStatus('Preparing the two small DEWA label text crops for Photo '+slot+'…');
+ setOCRStatus('Preparing the DEWA SN and MAC text crops from Photo 3…');
  try{
    const worker=await getOCRWorker();
    const strips=await prepareOCRImages(blob);
@@ -274,13 +279,14 @@ async function readPhoto(blob,slot){
  }
 }
 async function scanSavedPhoto(slot){
- const blob=photos[slot-1]||existingPhotos[slot-1];
- if(!blob){setOCRStatus('Capture Photo '+slot+' before requesting a scan.');return}
- await readPhoto(blob,slot);
+ if(slot!==3){setOCRStatus('OCR is restricted to Photo 3. Photos 1 and 2 are stored without scanning.');return}
+ const blob=photos[2]||existingPhotos[2];
+ if(!blob){setOCRStatus('Capture Photo 3 before requesting a scan.');return}
+ await readPhoto(blob,3);
 }
 
 function preview(slot, blob){const target=$('photo'+slot+'Preview');target.innerHTML='';if(blob){const img=document.createElement('img');img.src=URL.createObjectURL(blob);img.alt='Captured photo '+slot;target.appendChild(img)}else target.textContent='No photo captured';const scanButton=$('scanPhoto'+slot);if(scanButton)scanButton.disabled=!blob}
-function resetForm(){ $('recordId').value='';['villa','cluster','dewa','mac','developerPlot','gaid'].forEach(x=>$(x).value='');photos=[null,null];existingPhotos=[null,null];ocrAutoValues.dewa='';ocrAutoValues.mac='';$('photo1').value='';$('photo2').value='';preview(1,null);preview(2,null);$('ocrRaw').textContent='';$('ocrRawWrap').open=false;$('ocrCropPreview').removeAttribute('src');$('ocrPreviewWrap').open=false;$('formTitle').textContent='Add villa record';setStatus('');setOCRStatus('Enter the villa and cluster, then capture a clear, close-up photo of the meter label. OCR will start automatically. You can also tap Read Photo to retry.')}
+function resetForm(){ $('recordId').value='';['villa','cluster','dewa','mac','developerPlot','gaid'].forEach(x=>$(x).value='');photos=[null,null,null];existingPhotos=[null,null,null];ocrAutoValues.dewa='';ocrAutoValues.mac='';['photo1','photo2','photo3'].forEach(id=>$(id).value='');[1,2,3].forEach(i=>preview(i,null));$('ocrRaw').textContent='';$('ocrRawWrap').open=false;$('ocrCropPreview').removeAttribute('src');$('ocrPreviewWrap').open=false;$('formTitle').textContent='Add villa record';setStatus('');setOCRStatus('Enter the villa and cluster. Capture your general views in Photos 1 and 2, then capture the DEWA identification label in Photo 3. Only Photo 3 is scanned for DEWA SN and MAC.')}
 async function refresh(){
  const records=await allRecords();
  // Backfill plot and GAID for records created before this lookup update.
@@ -295,27 +301,27 @@ async function refresh(){
    }
  }
  const q=$('search').value.toLowerCase();
- const filtered=records.filter(r=>[r.villa,r.cluster,r.dewa,r.mac,r.developerPlot,r.gaid].join(' ').toLowerCase().includes(q));const box=$('records');box.innerHTML='';if(!filtered.length){box.innerHTML='<p class="muted">No matching records.</p>';return}filtered.forEach(r=>{const div=document.createElement('div');div.className='record';const left=document.createElement('div');const title=document.createElement('strong');title.textContent='Villa '+(r.villa||'—')+' · '+(r.cluster||'No cluster');const sub=document.createElement('div');sub.className='muted';sub.textContent='Plot: '+(r.developerPlot||'—')+' | GAID: '+(r.gaid||'—')+' | DEWA: '+(r.dewa||'—')+' | MAC: '+(r.mac||'—')+' | Photos: '+[r.photo1,r.photo2].filter(Boolean).length+'/2';left.append(title,sub);const right=document.createElement('div');const edit=document.createElement('button');edit.className='secondary';edit.textContent='Open';edit.onclick=()=>loadRecord(r.id);const del=document.createElement('button');del.className='danger';del.textContent='Delete';del.onclick=async()=>{if(confirm('Delete this villa record?')){await deleteRecord(r.id);await refresh()}};right.append(edit,del);div.append(left,right);box.append(div)})}
-async function loadRecord(id){const r=(await allRecords()).find(x=>x.id===id);if(!r)return;ocrAutoValues.dewa='';ocrAutoValues.mac='';$('recordId').value=r.id;$('villa').value=r.villa||'';$('cluster').value=normalizeCluster(r.cluster)||'';$('dewa').value=r.dewa||'';$('mac').value=r.mac||'';$('developerPlot').value=r.developerPlot||'';$('gaid').value=r.gaid||'';if(!$('developerPlot').value||!$('gaid').value)lookupVilla();photos=[null,null];existingPhotos=[r.photo1||null,r.photo2||null];preview(1,r.photo1);preview(2,r.photo2);$('formTitle').textContent='Edit villa record';setStatus('Record loaded. New photos replace the existing photo in that slot.');window.scrollTo({top:0,behavior:'smooth'})}
-for(let i=1;i<=2;i++)$('photo'+i).addEventListener('change',async e=>{
+ const filtered=records.filter(r=>[r.villa,r.cluster,r.dewa,r.mac,r.developerPlot,r.gaid].join(' ').toLowerCase().includes(q));const box=$('records');box.innerHTML='';if(!filtered.length){box.innerHTML='<p class="muted">No matching records.</p>';return}filtered.forEach(r=>{const div=document.createElement('div');div.className='record';const left=document.createElement('div');const title=document.createElement('strong');title.textContent='Villa '+(r.villa||'—')+' · '+(r.cluster||'No cluster');const sub=document.createElement('div');sub.className='muted';sub.textContent='Plot: '+(r.developerPlot||'—')+' | GAID: '+(r.gaid||'—')+' | DEWA: '+(r.dewa||'—')+' | MAC: '+(r.mac||'—')+' | Photos: '+[r.photo1,r.photo2,r.photo3].filter(Boolean).length+'/3';left.append(title,sub);const right=document.createElement('div');const edit=document.createElement('button');edit.className='secondary';edit.textContent='Open';edit.onclick=()=>loadRecord(r.id);const del=document.createElement('button');del.className='danger';del.textContent='Delete';del.onclick=async()=>{if(confirm('Delete this villa record?')){await deleteRecord(r.id);await refresh()}};right.append(edit,del);div.append(left,right);box.append(div)})}
+async function loadRecord(id){const r=(await allRecords()).find(x=>x.id===id);if(!r)return;ocrAutoValues.dewa='';ocrAutoValues.mac='';$('recordId').value=r.id;$('villa').value=r.villa||'';$('cluster').value=normalizeCluster(r.cluster)||'';$('dewa').value=r.dewa||'';$('mac').value=r.mac||'';$('developerPlot').value=r.developerPlot||'';$('gaid').value=r.gaid||'';if(!$('developerPlot').value||!$('gaid').value)lookupVilla();photos=[null,null,null];existingPhotos=[r.photo1||null,r.photo2||null,r.photo3||null];preview(1,r.photo1);preview(2,r.photo2);preview(3,r.photo3);$('formTitle').textContent='Edit villa record';setStatus('Record loaded. New photos replace the existing photo in that slot.');window.scrollTo({top:0,behavior:'smooth'})}
+for(let i=1;i<=3;i++)$('photo'+i).addEventListener('change',async e=>{
  const f=e.target.files[0];if(!f)return;
  const villa=$('villa').value.trim();
  if(!villa){alert('Enter the Villa Number first, then capture the photo.');e.target.value='';return}
  photos[i-1]=f;preview(i,f);
  const records=await allRecords();const id=$('recordId').value||crypto.randomUUID();
  const old=records.find(x=>x.id===id);
- const rec={id,serial:old?.serial||((Math.max(0,...records.map(x=>Number(x.serial)||0))+1)),villa,cluster:$('cluster').value,developerPlot:$('developerPlot').value,gaid:$('gaid').value,dewa:$('dewa').value.trim(),mac:$('mac').value.trim(),photo1:i===1?f:(photos[0]||existingPhotos[0]||old?.photo1||null),photo2:i===2?f:(photos[1]||existingPhotos[1]||old?.photo2||null),updatedAt:new Date().toISOString()};
- await putRecord(rec);$('recordId').value=id;existingPhotos=[rec.photo1,rec.photo2];
+ const rec={id,serial:old?.serial||((Math.max(0,...records.map(x=>Number(x.serial)||0))+1)),villa,cluster:$('cluster').value,developerPlot:$('developerPlot').value,gaid:$('gaid').value,dewa:$('dewa').value.trim(),mac:$('mac').value.trim(),photo1:i===1?f:(photos[0]||existingPhotos[0]||old?.photo1||null),photo2:i===2?f:(photos[1]||existingPhotos[1]||old?.photo2||null),photo3:i===3?f:(photos[2]||existingPhotos[2]||old?.photo3||null),updatedAt:new Date().toISOString()};
+ await putRecord(rec);$('recordId').value=id;existingPhotos=[rec.photo1,rec.photo2,rec.photo3];
  setStatus('Photo '+i+' saved automatically to Villa '+villa+'.');await refresh();
- await readPhoto(f,i);
+ if(i===3) await readPhoto(f,3);
 });
-$('saveBtn').onclick=async()=>{const villa=$('villa').value.trim();if(!villa){setStatus('Please enter a Villa Number.');$('villa').focus();return}const records=await allRecords();const id=$('recordId').value||crypto.randomUUID();const old=records.find(x=>x.id===id);const rec={id,serial:old?.serial||((Math.max(0,...records.map(x=>Number(x.serial)||0))+1)),villa,cluster:$('cluster').value,developerPlot:$('developerPlot').value,gaid:$('gaid').value,dewa:$('dewa').value.trim(),mac:$('mac').value.trim(),photo1:photos[0]||existingPhotos[0]||null,photo2:photos[1]||existingPhotos[1]||null,updatedAt:new Date().toISOString()};await putRecord(rec);resetForm();setStatus('Villa record saved successfully on this device.');await refresh()};
-$('scanPhoto1').onclick=()=>scanSavedPhoto(1);$('scanPhoto2').onclick=()=>scanSavedPhoto(2);
+$('saveBtn').onclick=async()=>{const villa=$('villa').value.trim();if(!villa){setStatus('Please enter a Villa Number.');$('villa').focus();return}const records=await allRecords();const id=$('recordId').value||crypto.randomUUID();const old=records.find(x=>x.id===id);const rec={id,serial:old?.serial||((Math.max(0,...records.map(x=>Number(x.serial)||0))+1)),villa,cluster:$('cluster').value,developerPlot:$('developerPlot').value,gaid:$('gaid').value,dewa:$('dewa').value.trim(),mac:$('mac').value.trim(),photo1:photos[0]||existingPhotos[0]||null,photo2:photos[1]||existingPhotos[1]||null,photo3:photos[2]||existingPhotos[2]||null,updatedAt:new Date().toISOString()};await putRecord(rec);resetForm();setStatus('Villa record saved successfully on this device.');await refresh()};
+$('scanPhoto3').onclick=()=>scanSavedPhoto(3);
 $('newBtn').onclick=resetForm;$('search').oninput=refresh;$('villa').addEventListener('input',lookupVilla);$('cluster').addEventListener('change',lookupVilla);
 ['dewa','mac'].forEach(id=>$(id).addEventListener('input',()=>{if($(id).value.trim()!==ocrAutoValues[id])ocrAutoValues[id]=''}));
-$('exportBtn').onclick=async()=>{const records=await allRecords();if(!records.length){alert('No records to export.');return}if(!window.ExcelJS){alert('Excel export needs an internet connection to load the workbook library.');return}const wb=new ExcelJS.Workbook();wb.creator='Villa DEWA Register';const sh=wb.addWorksheet('Villa Register');sh.columns=[{header:'S.No',key:'serial',width:9},{header:'Villa Number',key:'villa',width:18},{header:'Cluster',key:'cluster',width:20},{header:'DEWA Sr. No.',key:'dewa',width:20},{header:'MAC Number',key:'mac',width:22},{header:'Developer Plot No.',key:'developerPlot',width:20},{header:'GAID Number',key:'gaid',width:34},{header:'Photo 1',key:'p1',width:28},{header:'Photo 2',key:'p2',width:28}];sh.getRow(1).height=26;sh.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};sh.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF163B5C'}};for(let i=0;i<records.length;i++){const r=records[i],row=i+2;sh.addRow({serial:i+1,villa:r.villa,cluster:r.cluster==='1'?'Cluster 1 – Phase 3A':r.cluster==='2'?'Cluster 2 – Phase 3B':r.cluster,dewa:r.dewa,mac:r.mac,developerPlot:r.developerPlot,gaid:r.gaid});sh.getRow(row).height=100;for(let c=1;c<=9;c++)sh.getRow(row).getCell(c).alignment={vertical:'middle',horizontal:'center',wrapText:true};for(const [slot,col] of [[1,8],[2,9]]){const blob=r['photo'+slot];if(blob){const data=await blob.arrayBuffer();let ext=(blob.type||'image/jpeg').includes('png')?'png':(blob.type||'').includes('gif')?'gif':'jpeg';const imageId=wb.addImage({buffer:data,extension:ext});sh.addImage(imageId,{tl:{col:col-1,row:row-1},br:{col:col,row:row},editAs:'oneCell'});}else sh.getRow(row).getCell(col).value='No photo';}}sh.views=[{state:'frozen',ySplit:1}];sh.autoFilter={from:'A1',to:'I'+(records.length+1)};const buf=await wb.xlsx.writeBuffer();const url=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const a=document.createElement('a');a.href=url;a.download='Villa_DEWA_MAC_Register.xlsx';a.click();URL.revokeObjectURL(url)};
-$('backupBtn').onclick=async()=>{const rs=await allRecords();const payload=[];for(const r of rs){const x={...r};for(const k of ['photo1','photo2'])if(x[k])x[k]={type:x[k].type,data:Array.from(new Uint8Array(await x[k].arrayBuffer()))};payload.push(x)}const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Villa_Register_Backup.json';a.click();URL.revokeObjectURL(a.href)};
-$('restoreBtn').onclick=()=>$('restoreFile').click();$('restoreFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const data=JSON.parse(await f.text());for(const r of data){for(const k of ['photo1','photo2'])if(r[k]?.data)r[k]=new Blob([new Uint8Array(r[k].data)],{type:r[k].type||'image/jpeg'});await putRecord(r)}await refresh();alert('Backup restored.')}catch(err){alert('Could not restore this backup file.')}e.target.value=''};
+$('exportBtn').onclick=async()=>{const records=await allRecords();if(!records.length){alert('No records to export.');return}if(!window.ExcelJS){alert('Excel export needs an internet connection to load the workbook library.');return}const wb=new ExcelJS.Workbook();wb.creator='Villa DEWA Register';const sh=wb.addWorksheet('Villa Register');sh.columns=[{header:'S.No',key:'serial',width:9},{header:'Villa Number',key:'villa',width:18},{header:'Cluster',key:'cluster',width:20},{header:'DEWA Sr. No.',key:'dewa',width:20},{header:'MAC Number',key:'mac',width:22},{header:'Developer Plot No.',key:'developerPlot',width:20},{header:'GAID Number',key:'gaid',width:34},{header:'Photo 1',key:'p1',width:28},{header:'Photo 2',key:'p2',width:28},{header:'Photo 3',key:'p3',width:28}];sh.getRow(1).height=26;sh.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};sh.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF163B5C'}};for(let i=0;i<records.length;i++){const r=records[i],row=i+2;sh.addRow({serial:i+1,villa:r.villa,cluster:r.cluster==='1'?'Cluster 1 – Phase 3A':r.cluster==='2'?'Cluster 2 – Phase 3B':r.cluster,dewa:r.dewa,mac:r.mac,developerPlot:r.developerPlot,gaid:r.gaid});sh.getRow(row).height=100;for(let c=1;c<=10;c++)sh.getRow(row).getCell(c).alignment={vertical:'middle',horizontal:'center',wrapText:true};for(const [slot,col] of [[1,8],[2,9],[3,10]]){const blob=r['photo'+slot];if(blob){const data=await blob.arrayBuffer();let ext=(blob.type||'image/jpeg').includes('png')?'png':(blob.type||'').includes('gif')?'gif':'jpeg';const imageId=wb.addImage({buffer:data,extension:ext});sh.addImage(imageId,{tl:{col:col-1,row:row-1},br:{col:col,row:row},editAs:'oneCell'});}else sh.getRow(row).getCell(col).value='No photo';}}sh.views=[{state:'frozen',ySplit:1}];sh.autoFilter={from:'A1',to:'J'+(records.length+1)};const buf=await wb.xlsx.writeBuffer();const url=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const a=document.createElement('a');a.href=url;a.download='Villa_DEWA_MAC_Register.xlsx';a.click();URL.revokeObjectURL(url)};
+$('backupBtn').onclick=async()=>{const rs=await allRecords();const payload=[];for(const r of rs){const x={...r};for(const k of ['photo1','photo2','photo3'])if(x[k])x[k]={type:x[k].type,data:Array.from(new Uint8Array(await x[k].arrayBuffer()))};payload.push(x)}const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Villa_Register_Backup.json';a.click();URL.revokeObjectURL(a.href)};
+$('restoreBtn').onclick=()=>$('restoreFile').click();$('restoreFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const data=JSON.parse(await f.text());for(const r of data){for(const k of ['photo1','photo2','photo3'])if(r[k]?.data)r[k]=new Blob([new Uint8Array(r[k].data)],{type:r[k].type||'image/jpeg'});await putRecord(r)}await refresh();alert('Backup restored.')}catch(err){alert('Could not restore this backup file.')}e.target.value=''};
 (async()=>{await openDB();await refresh();if('serviceWorker'in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});})();
 </script>
 </body></html>

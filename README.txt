@@ -1,70 +1,52 @@
-VILLA DEWA REGISTER — UPDATED ANDROID WEB APP (PWA)
+VILLA DEWA REGISTER — VERSION 8 (THREE PHOTOS / PHOTO 3 OCR)
 
 WHAT IS INCLUDED
 - Villa entry and saved-record search/edit/delete.
-- DEWA Sr. No. and MAC Number fields with automatic photo OCR, manual re-scan buttons, visible progress, exact OCR crop preview, and recognised-text diagnostics. DEWA and MAC inputs remain editable.
+- Three photograph slots per villa.
+- OCR is triggered only by Photo 3, which is intended for a clear close-up of the DEWA identification label.
+- Photo 1 and Photo 2 are stored as ordinary photographs and are never sent to OCR.
+- OCR reads only the two narrow DEWA SN and MAC text strips from Photo 3. The full photo is not scanned.
+- DEWA Sr. No. and MAC Number remain editable. OCR will not overwrite a value manually entered by the user.
 - Automatic Developer Plot No. and GAID lookup for all 251 villas in Cluster 1 Phase 3A and all 145 villas in Cluster 2 Phase 3B (396 lookup records total).
-- Two photo slots per villa, with photos stored in the app's local browser database.
-- Excel export with both photos embedded in the matching villa row.
-- JSON backup and restore.
+- Excel export embeds all three photographs in the matching villa row.
+- JSON backup and restore includes all three photographs.
+- Existing records created with earlier two-photo versions remain readable. Their existing Photo 1 and Photo 2 are retained; Photo 3 is initially empty.
 
-HOW THE AUTOMATIC LOOKUP WORKS
-1. Select Cluster 1 – Phase 3A or Cluster 2 – Phase 3B.
-2. Enter the villa number (for example, 01 or 78).
-3. Developer Plot No. and GAID Number are filled from the supplied cluster Excel schedules.
-4. If a villa number is not in the selected cluster schedule, the lookup fields remain blank. Check the cluster and villa number.
+HOW TO ENTER A VILLA
+1. Select the cluster and enter the villa number.
+2. Capture Photo 1 and Photo 2 for the general meter/site views. These photos are saved but not scanned.
+3. Capture Photo 3 as a close, upright, well-lit image of the DEWA identification label. This is the only photo that starts OCR.
+4. Review the DEWA Sr. No. and MAC Number fields. Correct either field manually if needed; both are editable.
+5. Tap Save villa record. Photos are also attached to the local record as each is captured.
 
-HOW PHOTO READING WORKS
-1. Enter the villa number and select the cluster first.
-2. Capture a clear, close-up photo of the meter label in Photo 1 or Photo 2. Keep the label upright, well-lit and free from glare.
-3. The app automatically starts OCR after the photo is selected. Keep the app open and connected to the internet while the engine downloads and scans.
-4. A **Read Photo 1** or **Read Photo 2** button is also available to retry a scan without taking the picture again.
-5. Progress and any OCR error are shown on screen. Open **Show text recognised from the last photo** to see the raw text returned by OCR if it did not identify a labelled field.
-6. Open **Preview the exact label area scanned** to verify the two narrow text strips. Only those two upper-right label strips are sent to OCR; the full meter photo is never scanned. The barcode and most surrounding graphics are excluded.
-7. Review the DEWA Sr. No. and MAC Number against the actual meter label and tap **Save villa record**. Both fields remain editable. OCR fills blank fields and can update its own previous OCR result, but it will not overwrite a value you manually changed. OCR is assistance only; it can misread characters or fail on blurred, reflective, small or unusual labels. Enter or correct any value manually.
-8. OCR uses Tesseract.js 5.1.1 and English language data from public CDNs. Internet access is required for the first scan and for Excel export. Photos and register data are not uploaded by this app to a server.
+PHOTO 3 OCR DETAILS
+- The app prepares two narrow crops from the upper-right DEWA label area: one for the DEWA SN line and one for the MAC line.
+- Only those two crops from Photo 3 are sent to Tesseract OCR. Photo 1 and Photo 2 are not scanned, and there is no full-photo fallback.
+- Use the on-screen crop preview to check the scanned area and the recognised-text panel to inspect OCR output.
+- OCR may misread faint, blurred, reflective or unusual labels. Always compare the extracted values with the physical label before saving.
+- The OCR engine and English language data are loaded from public CDNs. Internet access is required for the first scan and for Excel export.
+
+EXCEL AND BACKUP
+- Excel export includes S.No, Villa Number, Cluster, DEWA Sr. No., MAC Number, Developer Plot No., GAID Number, Photo 1, Photo 2 and Photo 3.
+- All available photos are embedded in their corresponding row.
+- JSON backup and restore preserves all three photos. Back up regularly and keep a copy in a safe location.
 
 PUBLISH / INSTALL
-This is an installable Progressive Web App (PWA), not a native APK. It needs to be hosted over HTTPS. GitHub Pages is one free option:
-1. Create a GitHub repository (Public is simplest for GitHub Pages; remember that app source files in a public repository are public).
-2. Upload all files in this folder to the repository root: index.html, manifest.webmanifest, sw.js and villa-lookup.js.
-3. In repository Settings > Pages, choose Deploy from a branch, select main and /(root), then Save.
-4. Open the published HTTPS URL in Chrome on your Android phone.
-5. Use Chrome menu > Install app / Add to Home screen.
-6. Open the installed app while online. This build uses a new v7 service-worker cache name to force the fixed page to replace the earlier cached version. Close and reopen the app after it updates. If the old page still appears, open the published website in Chrome, refresh it, then relaunch the installed app.
+This is an installable Progressive Web App (PWA), not a native APK. It must be hosted over HTTPS.
+1. Extract this ZIP.
+2. Replace the files in the root of your existing hosting repository with all files from this package: index.html, manifest.webmanifest, sw.js and villa-lookup.js (README.txt is for guidance).
+3. Commit/publish the changes. If using GitHub Pages, allow deployment to complete.
+4. Open the published HTTPS URL in Chrome on Android, refresh, then close and reopen the installed app.
+5. The v8 service-worker cache name is changed so the browser can replace the older cached application files. If the old screen remains, refresh the website in Chrome and relaunch the installed app.
 
-PRIVACY AND DATA SAFETY
-- Villa records and photos are stored locally in the browser's IndexedDB on that device. The app does not upload them to a server.
-- Clearing the app/site storage, clearing browser data, or uninstalling/resetting the device can remove local records. Use Backup records regularly and keep the JSON backup in a safe location.
-- Do not assume that a captured photo or OCR result has been saved as a completed record until you tap Save villa record. Photo capture is also locally attached to the record automatically; the final DEWA/MAC values should be reviewed and saved.
-- GitHub Pages repository visibility is separate from app data: a public repository exposes the app source files and embedded villa lookup schedule, not the records stored locally on your phone.
-- Excel export uses ExcelJS from a public CDN and needs an internet connection. Exported images are embedded in the workbook; large original photos can make the Excel file large.
-- Camera capture behavior depends on the Android device and browser. The browser may open the camera or offer a camera/gallery chooser.
+DATA STORAGE AND PRIVACY
+- Villa records and photographs are stored locally in the browser's IndexedDB on that device. The app does not upload the register or photographs to a server.
+- Clearing app/site storage, clearing browser data, or uninstalling/resetting the device can remove local records. Use Backup records regularly.
+- Excel export uses ExcelJS from a public CDN and requires internet access.
+- A public source-code repository exposes the app files and embedded villa lookup schedule, not the records stored locally on the phone. Follow your project data-sharing policy when choosing repository visibility.
 
-OCR TROUBLESHOOTING
-- The first scan may take time because the OCR engine, WASM core and English language data must download. Do not close the app during this first scan.
-- If the progress stops or an error appears, note the exact error shown below the photo area.
-- If the raw OCR text is readable but the fields remain blank, the meter label may use different wording; use the displayed text to enter the value manually and share a clear label photo for further tuning.
-- The app must be served over HTTPS (such as GitHub Pages). It will not run browser camera/OCR features correctly from a local file opened directly on the phone.
-
-
-OCR FIX v4 – ISKRA / SILVER SPRING DEWA LABEL
-This version first scans an enlarged, enhanced crop of the upper-right communications label,
-where the supplied meter sample prints "DEWA SN" and "MAC". If either value is not detected,
-the app scans the full photograph as a fallback. Review the extracted values against the meter
-label before saving. This profile is tuned to the sample meter style supplied by the user;
-other meter label layouts may need a different crop profile.
-
-
-OCR FIX v6
-The label parser now explicitly recognises the printed labels "DEWA SN:" and "MAC:",
-extracts values on the same line or following OCR lines, normalises spaces/punctuation,
-and updates the DEWA Sr. No. and MAC Number fields whenever a value is detected.
-The OCR values should still be visually checked before saving.
-
-
-OCR FIX v6 – UPPER-RIGHT CORNER ONLY
-- OCR is restricted to a crop of the upper-right 50% of the photo and the top 36% of its height.
-- The full photograph is never scanned as a fallback.
-- If the DEWA SN or MAC is not found in that crop, the app reports the issue and leaves the fields editable.
-- The crop is enlarged before OCR to improve recognition of the small printed label.
+TROUBLESHOOTING
+- If OCR does not start, ensure Photo 3 is captured and the device is online. Keep the app open while the OCR engine loads.
+- If OCR returns incorrect or incomplete values, inspect the Photo 3 crop preview and raw recognised text. Enter or correct the values manually.
+- Camera capture behavior depends on Android and Chrome; the browser may open the camera or show a camera/gallery chooser.
+- Use the installed HTTPS app, not an index.html file opened directly from local phone storage.
